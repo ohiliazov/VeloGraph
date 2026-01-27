@@ -33,10 +33,10 @@
     - [x] *Shimano Products Line-up Chart*
 - [ ] **Парсинг (Parsing)**
   - [x] Установити бібліотеки: `pymupdf` (fitz), `langchain`, `openai`.
-  - [ ] Написати скрипт екстракції тексту (зберігаючи номери сторінок).
-- [ ] **Chunking (Нарізка)**
-  - [ ] Реалізувати `RecursiveCharacterTextSplitter`.
-  - [ ] *Задача із зірочкою:* Налаштувати regex для визначення назв моделей (напр. `RD-RX810`) і додавання їх у метадані.
+  - [x] Написати скрипт екстракції тексту (зберігаючи номери сторінок).
+- [x] **Chunking (Нарізка)**
+  - [x] Реалізувати `RecursiveCharacterTextSplitter`.
+  - [x] *Задача із зірочкою:* Налаштувати regex для визначення назв моделей (напр. `RD-RX810`) і додавання їх у метадані.
 - [ ] **Embedding & Indexing**
   - [ ] Налаштувати OpenAI Embeddings (`text-embedding-3-small`).
   - [ ] Створити індекс в ES з правильним маппінгом (`dense_vector` + `keyword`).

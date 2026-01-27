@@ -80,9 +80,12 @@ langchain==1.2.7
 langchain-core==1.2.7
     # via
     #   langchain
+    #   langchain-text-splitters
     #   langgraph
     #   langgraph-checkpoint
     #   langgraph-prebuilt
+langchain-text-splitters==1.1.0
+    # via velograph
 langgraph==1.0.7
     # via langchain
 langgraph-checkpoint==4.0.0
