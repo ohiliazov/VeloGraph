@@ -1,0 +1,46 @@
+services:
+  # --- Elasticsearch ---
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.2.1
+    container_name: velograph_es
+    environment:
+      - node.name=es01
+      - cluster.name=velograph-cluster
+      - discovery.type=single-node  # important: single-node
+      - bootstrap.memory_lock=true
+
+      - xpack.security.enabled=false  # important: false
+      - xpack.security.enrollment.enabled=false  # important: false
+
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"  # 1G memory limit (java heap)
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "9201:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    networks:
+      - velo_net
+
+  # --- Kibana (UI Dashboard) ---
+  kibana:
+    image: docker.elastic.co/kibana/kibana:9.2.4
+    container_name: velograph_kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - velo_net
+
+volumes:
+  es_data:
+    driver: local
+
+networks:
+  velo_net:
+    driver: bridge
