@@ -2,7 +2,7 @@ from pathlib import Path
 
 from loguru import logger
 
-artifacts_dir = Path(__file__).parent.parent / ".artifacts"
+artifacts_dir = Path(__file__).parent.parent / "downloads"
 
 
 if __name__ == "__main__":
