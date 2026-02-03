@@ -1,12 +1,14 @@
 from pydantic import BaseModel, Field, PositiveInt
-from pprint import pprint
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class BikeMeta(BaseModel):
-    model_name: str
+    model_config = {"populate_by_name": True, "from_attributes": True}
+
     brand: str
     category: str
-    year: int | None
+    model_name: str
+    model_year: int | None
     wheel_size: str | None
     frame_material: str | None
     brake_type: str | None
@@ -18,17 +20,19 @@ class BikeGeometry(BaseModel):
     Measurements are in millimeters (mm) and angles in degrees (°).
     """
 
+    model_config = {"populate_by_name": True, "from_attributes": True}
+
     # --- Group 1: Rider Fit (The 'Box' the rider occupies) ---
-    reach: PositiveInt = Field(
-        description=(
-            "The horizontal distance from the center of the Bottom Bracket to the center of the top of the head tube. "
-            "Primary indicator of 'roominess' when standing."
-        ),
-    )
     stack: PositiveInt = Field(
         description=(
             "The vertical distance from the center of the Bottom Bracket to the center of the top of the head tube. "
             "Determines the minimum handlebar height."
+        ),
+    )
+    reach: PositiveInt = Field(
+        description=(
+            "The horizontal distance from the center of the Bottom Bracket to the center of the top of the head tube. "
+            "Primary indicator of 'roominess' when standing."
         ),
     )
     top_tube_effective_length: PositiveInt = Field(
@@ -43,8 +47,7 @@ class BikeGeometry(BaseModel):
     seat_tube_length: PositiveInt = Field(
         alias="ST",
         description=(
-            "Measured center-to-top or center-to-center. "
-            "Limits seatpost insertion and determines standover height."
+            "Measured center-to-top or center-to-center. Limits seatpost insertion and determines standover height."
         ),
     )
     head_tube_length: PositiveInt = Field(
@@ -80,66 +83,39 @@ class BikeGeometry(BaseModel):
     wheelbase: PositiveInt = Field(
         alias="WB",
         description=(
-            "The total horizontal distance between the front and rear axles. "
-            "Longer provides more high-speed stability."
+            "The total horizontal distance between the front and rear axles. Longer provides more high-speed stability."
         ),
     )
 
-    class Config:
-        populate_by_name = True  # Allows initialization using aliases (e.g., TT=540)
+
+class Base(DeclarativeBase):
+    pass
 
 
-if __name__ == "__main__":
-    data = {
-        "S": {
-            "reach": 371,
-            "stack": 537,
-            "TT": 520,
-            "ST": 490,
-            "HT": 120,
-            "CS": 435,
-            "HA": 70.5,
-            "SA": 74.5,
-            "bb_drop": 67,
-            "WB": 1020,
-        },
-        "M": {
-            "reach": 375,
-            "stack": 557,
-            "TT": 535,
-            "ST": 520,
-            "HT": 140,
-            "CS": 435,
-            "HA": 71,
-            "SA": 74,
-            "bb_drop": 67,
-            "WB": 1027,
-        },
-        "L": {
-            "reach": 376,
-            "stack": 568,
-            "TT": 550,
-            "ST": 540,
-            "HT": 150,
-            "CS": 435,
-            "HA": 71.5,
-            "SA": 73,
-            "bb_drop": 67,
-            "WB": 1027,
-        },
-        "XL": {
-            "reach": 385,
-            "stack": 590,
-            "TT": 565,
-            "ST": 560,
-            "HT": 170,
-            "CS": 435,
-            "HA": 72,
-            "SA": 73,
-            "bb_drop": 67,
-            "WB": 1037,
-        },
-    }
+class BikeMetaORM(Base):
+    __tablename__ = "bike_meta"
 
-    for item in data.values():
-        pprint(BikeGeometry(**item))
+    id: Mapped[int] = mapped_column(primary_key=True)
+    brand: Mapped[str]
+    category: Mapped[str]
+    model_name: Mapped[str]
+    model_year: Mapped[int | None]
+    wheel_size: Mapped[str | None]
+    frame_material: Mapped[str | None]
+    brake_type: Mapped[str | None]
+
+
+class BikeGeometryORM(Base):
+    __tablename__ = "bike_geometry"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    stack: Mapped[int] = mapped_column(nullable=False)
+    reach: Mapped[int] = mapped_column(nullable=False)
+    top_tube_effective_length: Mapped[int] = mapped_column(nullable=False)
+    seat_tube_length: Mapped[int] = mapped_column(nullable=False)
+    head_tube_length: Mapped[int] = mapped_column(nullable=False)
+    chainstay_length: Mapped[int] = mapped_column(nullable=False)
+    head_tube_angle: Mapped[float] = mapped_column(nullable=False)
+    seat_tube_angle: Mapped[float] = mapped_column(nullable=False)
+    bb_drop: Mapped[int] = mapped_column(nullable=False)
+    wheelbase: Mapped[int] = mapped_column(nullable=False)

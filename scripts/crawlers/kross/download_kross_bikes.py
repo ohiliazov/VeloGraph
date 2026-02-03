@@ -1,9 +1,12 @@
-from playwright.sync_api import sync_playwright
-from pathlib import Path
 import json
 import time
 
-kross_bike_urls_path = Path("kross_bike_urls.json")
+from playwright.sync_api import sync_playwright
+
+from scripts.constants import artifacts_dir
+
+kross_artifacts = artifacts_dir / "kross"
+kross_bike_urls_path = kross_artifacts / "bike_urls.json"
 
 if not kross_bike_urls_path.exists():
     kross_bike_urls = set()
@@ -15,9 +18,7 @@ if not kross_bike_urls_path.exists():
         # Optionally block images/fonts to speed up
         page.route(
             "**/*",
-            lambda r: r.abort()
-            if r.request.resource_type in ["image", "font"]
-            else r.continue_(),
+            lambda r: r.abort() if r.request.resource_type in ["image", "font"] else r.continue_(),
         )
 
         # Start at main catalog page
@@ -30,9 +31,7 @@ if not kross_bike_urls_path.exists():
                 if href := btn.get_attribute("href"):
                     kross_bike_urls.add(href)
 
-            print(
-                f"Found {len(product_buttons)} bikes on this page, total {len(kross_bike_urls)}"
-            )
+            print(f"Found {len(product_buttons)} bikes on this page, total {len(kross_bike_urls)}")
 
             # --- Find next page button ---
             next_btn = page.query_selector("a.action.next")
@@ -59,7 +58,7 @@ else:
 # kross_bike_urls = sorted(kross_bike_urls)
 
 # Folder to save HTML
-kross_bike_htmls_path = Path("kross_bike_htmls")
+kross_bike_htmls_path = kross_artifacts / "raw_htmls"
 kross_bike_htmls_path.mkdir(exist_ok=True)
 
 with sync_playwright() as p:
@@ -69,9 +68,7 @@ with sync_playwright() as p:
     # Optional: block images/fonts to speed up
     page.route(
         "**/*",
-        lambda r: r.abort()
-        if r.request.resource_type in ["image", "font"]
-        else r.continue_(),
+        lambda r: r.abort() if r.request.resource_type in ["image", "font"] else r.continue_(),
     )
 
     for idx, url in enumerate(kross_bike_urls, start=1):

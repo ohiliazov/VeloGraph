@@ -1,4 +1,19 @@
 services:
+  # --- Postgres ---
+  postgres:
+    image: postgres:18.1-alpine
+    container_name: velograph_postgres
+    environment:
+      POSTGRES_USER: velograph
+      POSTGRES_PASSWORD: velograph
+      POSTGRES_DB: velograph
+    ports:
+      - "5433:5432"
+    networks:
+      - velograph_net
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
   # --- Elasticsearch ---
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:9.2.1
@@ -22,7 +37,7 @@ services:
     volumes:
       - es_data:/usr/share/elasticsearch/data
     networks:
-      - velo_net
+      - velograph_net
 
   # --- Kibana (UI Dashboard) ---
   kibana:
@@ -35,12 +50,14 @@ services:
     depends_on:
       - elasticsearch
     networks:
-      - velo_net
+      - velograph_net
 
 volumes:
+  pg_data:
+    driver: local
   es_data:
     driver: local
 
 networks:
-  velo_net:
+  velograph_net:
     driver: bridge
