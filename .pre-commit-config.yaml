@@ -5,9 +5,16 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-ast
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+      - id: fix-byte-order-marker
       - id: check-added-large-files
         args: ["--maxkb=1024"]  # 1 MB limit (default is 500 KB)
         exclude: manuals/
+      - id: debug-statements
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.14
@@ -15,6 +22,7 @@ repos:
       - id: ruff
         args:
           - --fix
+          - --show-fixes
       - id: ruff-format
 
   - repo: https://github.com/astral-sh/uv-pre-commit

@@ -105,7 +105,7 @@ class BikeMetaORM(Base):
     frame_material: Mapped[str | None]
     brake_type: Mapped[str | None]
 
-    geometries: Mapped[list["BikeGeometryORM"]] = relationship(back_populates="bike_meta", cascade="all, delete-orphan")
+    geometries: Mapped[list[BikeGeometryORM]] = relationship(back_populates="bike_meta", cascade="all, delete-orphan")
 
 
 class BikeGeometryORM(Base):
@@ -126,4 +126,4 @@ class BikeGeometryORM(Base):
     bb_drop: Mapped[int] = mapped_column(nullable=False)
     wheelbase: Mapped[int] = mapped_column(nullable=False)
 
-    bike_meta: Mapped["BikeMetaORM"] = relationship(back_populates="geometries")
+    bike_meta: Mapped[BikeMetaORM] = relationship(back_populates="geometries")

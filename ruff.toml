@@ -1,5 +1,18 @@
 line-length = 120
-lint.extend-select = ["PIE790", "I001"]
+
+[lint]
+select = [
+  "E",   # pycodestyle errors
+  "F",   # Pyflakes
+  "W",   # pycodestyle warnings
+  "I",   # isort (import sorting)
+  "UP",  # pyupgrade rules
+  "B",   # flake8-bugbear
+  "SIM", # flake8-simplify
+  "PIE", # flake8-pie
+  "RUF", # Ruff-specific rules
+]
+# Keep pydocstyle configuration available but do not enable D* yet to avoid noisy failures.
 
 [lint.pydocstyle]
 convention = "google"
@@ -7,3 +20,6 @@ convention = "google"
 [lint.isort]
 combine-as-imports = true
 split-on-trailing-comma = false
+
+[format]
+line-ending = "lf"

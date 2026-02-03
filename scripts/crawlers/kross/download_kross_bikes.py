@@ -58,7 +58,7 @@ if not kross_bike_urls_path.exists():
 
     logger.success("💾 Saved {} bike URLs to {}", len(kross_bike_urls), kross_bike_urls_path)
 else:
-    with open(kross_bike_urls_path, "r", encoding="utf-8") as f:
+    with open(kross_bike_urls_path, encoding="utf-8") as f:
         kross_bike_urls = set(json.load(f))
     logger.info("📥 Loaded {} bike URLs from {}", len(kross_bike_urls), kross_bike_urls_path)
 

@@ -1,5 +1,5 @@
 import json
-from typing import Any, Dict
+from typing import Any
 
 from loguru import logger
 from sqlalchemy import delete, select
@@ -23,8 +23,8 @@ SPEC_KEYS_MAP = {
 }
 
 
-def build_geometry_payload(specs: Dict[str, list[Any]], idx: int) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {}
+def build_geometry_payload(specs: dict[str, list[Any]], idx: int) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
     for src_key, dst_key in SPEC_KEYS_MAP.items():
         values = specs.get(src_key, [])
         value = values[idx] if idx < len(values) else None
@@ -35,7 +35,7 @@ def build_geometry_payload(specs: Dict[str, list[Any]], idx: int) -> Dict[str, A
         if dst_key in {"head_tube_angle", "seat_tube_angle"}:
             payload[dst_key] = float(num)
         else:
-            payload[dst_key] = int(round(num))
+            payload[dst_key] = round(num)
     return payload
 
 

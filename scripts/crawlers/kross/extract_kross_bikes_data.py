@@ -2,7 +2,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Union
+from typing import Any
 
 from bs4 import BeautifulSoup, Tag
 from loguru import logger
@@ -11,7 +11,7 @@ from app.utils.helpers import extract_number
 from scripts.constants import artifacts_dir
 
 
-def clean_value(value: str) -> Union[str, int, float]:
+def clean_value(value: str) -> str | int | float:
     """
     Converts string values to int or float if possible.
     Handles Polish decimal formats (e.g., "74,5" -> 74.5).
@@ -25,7 +25,7 @@ def clean_value(value: str) -> Union[str, int, float]:
         return value.strip()
 
 
-def extract_bike_data(html: str) -> Dict[str, Any]:
+def extract_bike_data(html: str) -> dict[str, Any]:
     """
     Parses Kross bike HTML.
     Always returns a dictionary with 'meta'.
@@ -75,8 +75,8 @@ def extract_bike_data(html: str) -> Dict[str, Any]:
         return result
 
     # --- 3. Extract Table Data ---
-    bike_sizes: List[str] = []
-    bike_specs: Dict[str, List[Any]] = {}
+    bike_sizes: list[str] = []
+    bike_specs: dict[str, list[Any]] = {}
 
     # 3a. Headers (Sizes)
     header_row = target_table.find("thead").find("tr")
