@@ -1,9 +1,10 @@
 from elasticsearch import Elasticsearch, helpers
 from loguru import logger
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
-from app.config import es_settings, pg_settings
+from app.config import es_settings
+from app.core.db import SessionLocal
 from app.core.models import BikeMetaORM
 
 INDEX_NAME = "bikes"
@@ -101,7 +102,6 @@ def create_index(es):
 
 def main():
     # 1. Connect to DB and ES
-    engine = create_engine(pg_settings.connection_string)
     es = Elasticsearch(es_settings.url)
 
     if not es.ping():
@@ -112,7 +112,7 @@ def main():
     create_index(es)
 
     # 3. Fetch Data (Optimized)
-    with Session(engine) as session:
+    with SessionLocal() as session:
         logger.info("🔍 Fetching bikes from PostgreSQL...")
 
         # selectinload is CRITICAL: it fetches all geometries in 1 extra query

@@ -1,11 +1,15 @@
 from loguru import logger
 from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 from app.config import pg_settings
 from app.core.models import Base
 
-if __name__ == "__main__":
-    engine = create_engine(pg_settings.connection_string)
+engine = create_engine(pg_settings.connection_string)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def init_db():
     Base.metadata.create_all(engine)
     logger.success(
         "✅ Database schema created for '{}' on {}:{}",
@@ -13,3 +17,15 @@ if __name__ == "__main__":
         pg_settings.host,
         pg_settings.port,
     )
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+if __name__ == "__main__":
+    init_db()

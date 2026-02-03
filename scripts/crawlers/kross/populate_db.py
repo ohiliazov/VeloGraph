@@ -1,13 +1,12 @@
 import json
-import re
 from typing import Any, Dict
 
 from loguru import logger
-from sqlalchemy import create_engine, delete, select
-from sqlalchemy.orm import Session
+from sqlalchemy import delete, select
 
-from app.config import pg_settings
-from app.core.models import Base, BikeGeometryORM, BikeMetaORM
+from app.core.db import SessionLocal
+from app.core.models import BikeGeometryORM, BikeMetaORM
+from app.utils.helpers import extract_number
 from scripts.constants import artifacts_dir
 
 SPEC_KEYS_MAP = {
@@ -24,16 +23,6 @@ SPEC_KEYS_MAP = {
 }
 
 
-def _extract_number(val: Any) -> float:
-    if isinstance(val, (int, float)):
-        return float(val)
-    if isinstance(val, str):
-        m = re.search(r"[-+]?\d+(?:[.,]\d+)?", val)
-        if m:
-            return float(m.group(0).replace(",", "."))
-    raise ValueError(f"Cannot parse numeric value from: {val!r}")
-
-
 def build_geometry_payload(specs: Dict[str, list[Any]], idx: int) -> Dict[str, Any]:
     payload: Dict[str, Any] = {}
     for src_key, dst_key in SPEC_KEYS_MAP.items():
@@ -41,7 +30,7 @@ def build_geometry_payload(specs: Dict[str, list[Any]], idx: int) -> Dict[str, A
         value = values[idx] if idx < len(values) else None
         if value is None:
             raise ValueError(f"Missing required geometry value for '{src_key}' at index {idx}")
-        num = _extract_number(value)
+        num = extract_number(value)
         # Cast numeric types to expected ORM field types
         if dst_key in {"head_tube_angle", "seat_tube_angle"}:
             payload[dst_key] = float(num)
@@ -51,18 +40,13 @@ def build_geometry_payload(specs: Dict[str, list[Any]], idx: int) -> Dict[str, A
 
 
 if __name__ == "__main__":
-    engine = create_engine(pg_settings.connection_string)
-    # Development-only: ensure schema matches current ORM by recreating tables
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
-
     extracted_jsons_dir = artifacts_dir / "kross" / "extracted_jsons"
 
     total_files = 0
     bikes_created = 0
     geometries_inserted = 0
 
-    with Session(engine) as session:
+    with SessionLocal() as session:
         for item in extracted_jsons_dir.iterdir():
             total_files += 1
             data = json.loads(item.read_text(encoding="utf-8"))

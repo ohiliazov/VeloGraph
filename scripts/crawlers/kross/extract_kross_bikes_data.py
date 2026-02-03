@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Union
 from bs4 import BeautifulSoup, Tag
 from loguru import logger
 
+from app.utils.helpers import extract_number
 from scripts.constants import artifacts_dir
 
 
@@ -18,21 +19,10 @@ def clean_value(value: str) -> Union[str, int, float]:
     if not value:
         return ""
 
-    value = value.strip()
-
-    # Try Integer
     try:
-        return int(value)
+        return extract_number(value)
     except ValueError:
-        pass
-
-    # Try Float (replace Polish comma)
-    try:
-        return float(value.replace(",", "."))
-    except ValueError:
-        pass
-
-    return value
+        return value.strip()
 
 
 def extract_bike_data(html: str) -> Dict[str, Any]:
