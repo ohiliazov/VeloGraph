@@ -1,6 +1,7 @@
 import json
 import time
 
+from loguru import logger
 from playwright.sync_api import sync_playwright
 
 from scripts.constants import artifacts_dir
@@ -22,6 +23,7 @@ if not kross_bike_urls_path.exists():
         )
 
         # Start at main catalog page
+        logger.info("🌐 Opening Kross catalog page: {}", "https://kross.pl/rowery")
         page.goto("https://kross.pl/rowery", wait_until="networkidle")
 
         while True:
@@ -31,15 +33,21 @@ if not kross_bike_urls_path.exists():
                 if href := btn.get_attribute("href"):
                     kross_bike_urls.add(href)
 
-            print(f"Found {len(product_buttons)} bikes on this page, total {len(kross_bike_urls)}")
+            logger.info(
+                "🔎 Found {} bikes on this page, total unique collected: {}",
+                len(product_buttons),
+                len(kross_bike_urls),
+            )
 
             # --- Find next page button ---
             next_btn = page.query_selector("a.action.next")
             if next_btn:
                 if next_href := next_btn.get_attribute("href"):
+                    logger.debug("➡️ Navigating to next catalog page: {}", next_href)
                     page.goto(next_href, wait_until="networkidle")
                     time.sleep(1)  # wait for JS
             else:
+                logger.info("🛑 No more catalog pages detected. Stopping pagination.")
                 break
 
         browser.close()
@@ -48,11 +56,11 @@ if not kross_bike_urls_path.exists():
     with open(kross_bike_urls_path, "w", encoding="utf-8") as f:
         json.dump(list(kross_bike_urls), f, indent=2)
 
-    print(f"Saved {len(kross_bike_urls)} bike URLs to {kross_bike_urls_path}")
+    logger.success("💾 Saved {} bike URLs to {}", len(kross_bike_urls), kross_bike_urls_path)
 else:
     with open(kross_bike_urls_path, "r", encoding="utf-8") as f:
         kross_bike_urls = set(json.load(f))
-    print(f"Found {len(kross_bike_urls)} bike URLs in {kross_bike_urls_path}")
+    logger.info("📥 Loaded {} bike URLs from {}", len(kross_bike_urls), kross_bike_urls_path)
 
 
 # kross_bike_urls = sorted(kross_bike_urls)
@@ -60,6 +68,7 @@ else:
 # Folder to save HTML
 kross_bike_htmls_path = kross_artifacts / "raw_htmls"
 kross_bike_htmls_path.mkdir(exist_ok=True)
+logger.debug("📂 Ensured HTML output directory exists: {}", kross_bike_htmls_path)
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
@@ -76,14 +85,15 @@ with sync_playwright() as p:
         kross_bike_urls_path = kross_bike_htmls_path / f"{slug}.html"
 
         if kross_bike_urls_path.exists():
-            print(f"[{idx}/{len(kross_bike_urls)}] Skipping: {url} (already exists)")
+            logger.debug("⏭️ [{:d}/{:d}] Skipping existing HTML for {}", idx, len(kross_bike_urls), url)
             continue
 
-        print(f"[{idx}/{len(kross_bike_urls)}] Fetching: {url}")
+        logger.info("⬇️ [{:d}/{:d}] Fetching: {}", idx, len(kross_bike_urls), url)
         page.goto(url, wait_until="load")
         time.sleep(1)  # extra wait for JS
 
         # Save rendered HTML
         kross_bike_urls_path.write_text(page.content(), encoding="utf-8")
+        logger.debug("💾 Saved HTML to {} (slug: {})", kross_bike_urls_path, slug)
 
     browser.close()

@@ -1,7 +1,9 @@
 from pathlib import Path
 
+from loguru import logger
+
 artifacts_dir = Path(__file__).parent.parent / ".artifacts"
 
 
 if __name__ == "__main__":
-    print(artifacts_dir)
+    logger.info("🗂️ Artifacts directory: {}", artifacts_dir)

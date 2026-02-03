@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, PositiveInt
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class BikeMeta(BaseModel):
@@ -8,10 +9,10 @@ class BikeMeta(BaseModel):
     brand: str
     category: str
     model_name: str
-    model_year: int | None
-    wheel_size: str | None
-    frame_material: str | None
-    brake_type: str | None
+    model_year: int | None = None
+    wheel_size: str | None = None
+    frame_material: str | None = None
+    brake_type: str | None = None
 
 
 class BikeGeometry(BaseModel):
@@ -104,11 +105,16 @@ class BikeMetaORM(Base):
     frame_material: Mapped[str | None]
     brake_type: Mapped[str | None]
 
+    geometries: Mapped[list["BikeGeometryORM"]] = relationship(back_populates="bike_meta", cascade="all, delete-orphan")
+
 
 class BikeGeometryORM(Base):
     __tablename__ = "bike_geometry"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    bike_meta_id: Mapped[int] = mapped_column(ForeignKey("bike_meta.id", ondelete="CASCADE"), nullable=False)
+    size_label: Mapped[str] = mapped_column(nullable=False)
+
     stack: Mapped[int] = mapped_column(nullable=False)
     reach: Mapped[int] = mapped_column(nullable=False)
     top_tube_effective_length: Mapped[int] = mapped_column(nullable=False)
@@ -119,3 +125,5 @@ class BikeGeometryORM(Base):
     seat_tube_angle: Mapped[float] = mapped_column(nullable=False)
     bb_drop: Mapped[int] = mapped_column(nullable=False)
     wheelbase: Mapped[int] = mapped_column(nullable=False)
+
+    bike_meta: Mapped["BikeMetaORM"] = relationship(back_populates="geometries")
