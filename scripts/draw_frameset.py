@@ -1,195 +1,183 @@
+from __future__ import annotations
+
 import math
+import re
+from pathlib import Path
 
 import svgwrite
+from loguru import logger
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
-# Bike Geometry
-frame_tube_width = 30
-stack_mm = 590
-reach_mm = 385
-bb_drop_mm = 67
-chainstay_mm = 435
-seat_tube_mm = 560
-seat_tube_angle = 73
-head_tube_mm = 170
-head_tube_angle = 72
-wheelbase_mm = 1037
-wheel_diameter_mm = 622
-tire_width_mm = 30
-rim_depth_mm = 65
+from app.core.db import SessionLocal
+from app.core.models import BikeGeometryORM, BikeMetaORM
+from scripts.constants import artifacts_dir
 
-# Coordinates
-bb_coords = (0, -bb_drop_mm)
-rear_axle_coords = (-chainstay_mm, 0)
-front_axle_coords = (wheelbase_mm - chainstay_mm, 0)
-
-seat_tube_coords = (
-    -seat_tube_mm * math.cos(math.radians(seat_tube_angle)),
-    seat_tube_mm * math.sin(math.radians(seat_tube_angle)),
-)
-
-head_tube_top_coords = (reach_mm, stack_mm - bb_drop_mm)
-
-head_tube_bottom_coords = (
-    head_tube_top_coords[0] + head_tube_mm * math.cos(math.radians(head_tube_angle)),
-    head_tube_top_coords[1] - head_tube_mm * math.sin(math.radians(head_tube_angle)),
-)
-
-# COMPUTE SVG SIZE
-wheel_radius = (wheel_diameter_mm + tire_width_mm) / 2
-
-xs = [
-    rear_axle_coords[0] - wheel_radius,
-    front_axle_coords[0] + wheel_radius,
-    seat_tube_coords[0],
-    head_tube_top_coords[0],
-    head_tube_bottom_coords[0],
-]
-
-ys = [
-    rear_axle_coords[1] - wheel_radius,
-    rear_axle_coords[1] + wheel_radius,
-    seat_tube_coords[1],
-    head_tube_top_coords[1],
-    head_tube_bottom_coords[1],
-    bb_coords[1],
-]
-
-min_x, max_x = min(xs), max(xs)
-min_y, max_y = min(ys), max(ys)
-
-width_mm = max_x - min_x
-height_mm = max_y - min_y
-
+# --- Geometry rendering helpers ---
+FRAME_COLOR = "blue"
+FRAME_TUBE_WIDTH = 30  # mm visual thickness
+WHEEL_DIAMETER_MM = 622  # 700c default
+TIRE_WIDTH_MM = 30
+RIM_DEPTH_MM = 45
 MARGIN_PX = 20
-SCALE = 0.4
+SCALE = 0.4  # px per mm
 
-SVG_WIDTH = int(width_mm * SCALE + 2 * MARGIN_PX)
-SVG_HEIGHT = int(height_mm * SCALE + 2 * MARGIN_PX)
 
-tx = MARGIN_PX - SCALE * min_x
-ty = MARGIN_PX + SCALE * max_y
+def sanitize_filename(value: str) -> str:
+    s = value.strip().lower()
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    s = re.sub(r"-+", "-", s).strip("-")
+    return s or "unnamed"
 
-dwg = svgwrite.Drawing("esker.svg", size=(f"{SVG_WIDTH}px", f"{SVG_HEIGHT}px"))
 
-# Geometry group:
-# - center canvas
-# - scale mm → px
-# - flip Y axis
-g = dwg.g(transform=f"translate({tx},{ty}) scale({SCALE},-{SCALE})")
+def compute_points(geom: BikeGeometryORM) -> dict[str, tuple[float, float]]:
+    # Inputs from DB are already in mm/degrees according to ORM
+    stack_mm = geom.stack
+    reach_mm = geom.reach
+    bb_drop_mm = geom.bb_drop
+    chainstay_mm = geom.chainstay_length
+    seat_tube_mm = geom.seat_tube_length
+    seat_tube_angle = geom.seat_tube_angle
+    head_tube_mm = geom.head_tube_length
+    head_tube_angle = geom.head_tube_angle
+    wheelbase_mm = geom.wheelbase
 
-# Wheels
-g.add(
-    dwg.circle(
-        center=rear_axle_coords,
-        r=(wheel_diameter_mm + tire_width_mm) / 2,
-        stroke="black",
-        stroke_width=tire_width_mm,
-        fill="none",
+    bb = (0.0, -float(bb_drop_mm))
+    rear_axle = (-float(chainstay_mm), 0.0)
+    front_axle = (float(wheelbase_mm - chainstay_mm), 0.0)
+
+    seat_top = (
+        -seat_tube_mm * math.cos(math.radians(seat_tube_angle)),
+        seat_tube_mm * math.sin(math.radians(seat_tube_angle)),
     )
-)
-g.add(
-    dwg.circle(
-        center=rear_axle_coords,
-        r=(wheel_diameter_mm - rim_depth_mm) / 2,
-        stroke="grey",
-        stroke_width=rim_depth_mm,
-        fill="none",
-    )
-)
-g.add(
-    dwg.circle(
-        center=front_axle_coords,
-        r=(wheel_diameter_mm + tire_width_mm) / 2,
-        stroke="black",
-        stroke_width=tire_width_mm,
-        fill="none",
-    )
-)
-g.add(
-    dwg.circle(
-        center=front_axle_coords,
-        r=(wheel_diameter_mm - rim_depth_mm) / 2,
-        stroke="grey",
-        stroke_width=rim_depth_mm,
-        fill="none",
-    )
-)
 
-# Chain stay tube
-g.add(dwg.circle(center=bb_coords, r=frame_tube_width // 2, fill="red"))
-g.add(dwg.circle(center=rear_axle_coords, r=frame_tube_width // 2, fill="red"))
-g.add(
-    dwg.line(
-        start=bb_coords,
-        end=rear_axle_coords,
-        stroke="red",
-        stroke_width=frame_tube_width,
+    head_top = (float(reach_mm), float(stack_mm - bb_drop_mm))
+    head_bottom = (
+        head_top[0] + head_tube_mm * math.cos(math.radians(head_tube_angle)),
+        head_top[1] - head_tube_mm * math.sin(math.radians(head_tube_angle)),
     )
-)
 
-# Seat tube
-g.add(dwg.circle(center=seat_tube_coords, r=frame_tube_width // 2, fill="red"))
-g.add(
-    dwg.line(
-        start=bb_coords,
-        end=seat_tube_coords,
-        stroke="red",
-        stroke_width=frame_tube_width,
+    return {
+        "bb": bb,
+        "rear_axle": rear_axle,
+        "front_axle": front_axle,
+        "seat_top": seat_top,
+        "head_top": head_top,
+        "head_bottom": head_bottom,
+    }
+
+
+def compute_canvas(points: dict[str, tuple[float, float]]) -> tuple[int, int, float, float]:
+    wheel_radius = (WHEEL_DIAMETER_MM + TIRE_WIDTH_MM) / 2
+
+    xs = [
+        points["rear_axle"][0] - wheel_radius,
+        points["front_axle"][0] + wheel_radius,
+        points["seat_top"][0],
+        points["head_top"][0],
+        points["head_bottom"][0],
+    ]
+    ys = [
+        points["rear_axle"][1] - wheel_radius,
+        points["rear_axle"][1] + wheel_radius,
+        points["seat_top"][1],
+        points["head_top"][1],
+        points["head_bottom"][1],
+        points["bb"][1],
+    ]
+
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+
+    width_mm = max_x - min_x
+    height_mm = max_y - min_y
+
+    svg_w = int(width_mm * SCALE + 2 * MARGIN_PX)
+    svg_h = int(height_mm * SCALE + 2 * MARGIN_PX)
+
+    tx = MARGIN_PX - SCALE * min_x
+    ty = MARGIN_PX + SCALE * max_y
+    return svg_w, svg_h, tx, ty
+
+
+def render_svg(meta: BikeMetaORM, geom: BikeGeometryORM, out_path: Path) -> None:
+    points = compute_points(geom)
+    svg_w, svg_h, tx, ty = compute_canvas(points)
+
+    dwg = svgwrite.Drawing(str(out_path), size=(f"{svg_w}px", f"{svg_h}px"))
+    g = dwg.g(transform=f"translate({tx},{ty}) scale({SCALE},-{SCALE})")
+
+    wheel_r = (WHEEL_DIAMETER_MM + TIRE_WIDTH_MM) / 2
+    rim_r = (WHEEL_DIAMETER_MM - RIM_DEPTH_MM) / 2
+
+    # Wheels
+    g.add(dwg.circle(center=points["rear_axle"], r=wheel_r, stroke="black", stroke_width=TIRE_WIDTH_MM, fill="none"))
+    g.add(dwg.circle(center=points["rear_axle"], r=rim_r, stroke="grey", stroke_width=RIM_DEPTH_MM, fill="none"))
+    g.add(dwg.circle(center=points["front_axle"], r=wheel_r, stroke="black", stroke_width=TIRE_WIDTH_MM, fill="none"))
+    g.add(dwg.circle(center=points["front_axle"], r=rim_r, stroke="grey", stroke_width=RIM_DEPTH_MM, fill="none"))
+
+    # Tubes
+    g.add(dwg.circle(center=points["bb"], r=FRAME_TUBE_WIDTH // 2, fill=FRAME_COLOR))
+    g.add(dwg.circle(center=points["rear_axle"], r=FRAME_TUBE_WIDTH // 2, fill=FRAME_COLOR))
+    g.add(dwg.line(start=points["bb"], end=points["rear_axle"], stroke=FRAME_COLOR, stroke_width=FRAME_TUBE_WIDTH))
+
+    g.add(dwg.circle(center=points["seat_top"], r=FRAME_TUBE_WIDTH // 2, fill=FRAME_COLOR))
+    g.add(dwg.line(start=points["bb"], end=points["seat_top"], stroke=FRAME_COLOR, stroke_width=FRAME_TUBE_WIDTH))
+
+    g.add(
+        dwg.line(start=points["seat_top"], end=points["rear_axle"], stroke=FRAME_COLOR, stroke_width=FRAME_TUBE_WIDTH)
     )
-)
 
-# Seat stay tube
-g.add(
-    dwg.line(
-        start=seat_tube_coords,
-        end=rear_axle_coords,
-        stroke="red",
-        stroke_width=frame_tube_width,
+    g.add(dwg.circle(center=points["head_bottom"], r=FRAME_TUBE_WIDTH // 2, fill=FRAME_COLOR))
+    g.add(dwg.line(start=points["bb"], end=points["head_bottom"], stroke=FRAME_COLOR, stroke_width=FRAME_TUBE_WIDTH))
+
+    g.add(dwg.circle(center=points["head_top"], r=FRAME_TUBE_WIDTH // 2, fill=FRAME_COLOR))
+    g.add(dwg.line(start=points["seat_top"], end=points["head_top"], stroke=FRAME_COLOR, stroke_width=FRAME_TUBE_WIDTH))
+
+    g.add(
+        dwg.line(start=points["head_bottom"], end=points["head_top"], stroke=FRAME_COLOR, stroke_width=FRAME_TUBE_WIDTH)
     )
-)
 
-# Down tube
-g.add(dwg.circle(center=head_tube_bottom_coords, r=frame_tube_width // 2, fill="red"))
-g.add(
-    dwg.line(
-        start=bb_coords,
-        end=head_tube_bottom_coords,
-        stroke="red",
-        stroke_width=frame_tube_width,
+    g.add(dwg.circle(center=points["front_axle"], r=FRAME_TUBE_WIDTH // 2, fill=FRAME_COLOR))
+    g.add(
+        dwg.line(
+            start=points["head_bottom"], end=points["front_axle"], stroke=FRAME_COLOR, stroke_width=FRAME_TUBE_WIDTH
+        )
     )
-)
 
-# Top tube
-g.add(dwg.circle(center=head_tube_top_coords, r=frame_tube_width // 2, fill="red"))
-g.add(
-    dwg.line(
-        start=seat_tube_coords,
-        end=head_tube_top_coords,
-        stroke="red",
-        stroke_width=frame_tube_width,
-    )
-)
+    dwg.add(g)
+    dwg.save()
 
-# Head tube
-g.add(
-    dwg.line(
-        start=head_tube_bottom_coords,
-        end=head_tube_top_coords,
-        stroke="red",
-        stroke_width=frame_tube_width,
-    )
-)
 
-# Fork
-g.add(dwg.circle(center=front_axle_coords, r=frame_tube_width // 2, fill="red"))
-g.add(
-    dwg.line(
-        start=head_tube_bottom_coords,
-        end=front_axle_coords,
-        stroke="red",
-        stroke_width=frame_tube_width,
-    )
-)
+def main() -> None:
+    output_dir = artifacts_dir / "generated_svgs"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-dwg.add(g)
-dwg.save()
+    count = 0
+    with SessionLocal() as session:
+        stmt = select(BikeMetaORM).options(selectinload(BikeMetaORM.geometries))
+        bikes = session.scalars(stmt).all()
+
+        if not bikes:
+            logger.warning("No bikes found in database; nothing to render.")
+            return
+
+        for bike in bikes:
+            for geom in bike.geometries:
+                brand = bike.brand or "unknown"
+                model = bike.model_name or "model"
+                size = geom.size_label or "size"
+                fname = f"{sanitize_filename(brand)}_{sanitize_filename(model)}_{sanitize_filename(size)}.svg"
+                out_path = output_dir / fname
+                try:
+                    render_svg(bike, geom, out_path)
+                    count += 1
+                    logger.debug("Rendered {} → {}", f"{brand} {model} [{size}]", out_path)
+                except Exception:
+                    logger.exception("Failed to render {} {} {}", brand, model, size)
+
+    logger.success("Generated {} SVG files in {}", count, output_dir)
+
+
+if __name__ == "__main__":
+    main()
