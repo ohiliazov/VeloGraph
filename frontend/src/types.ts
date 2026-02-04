@@ -17,7 +17,7 @@ export interface Bike {
   brand: string;
   model_name: string;
   model_year?: number;
-  category: string;
+  categories: string[];
   wheel_size?: string;
   frame_material?: string;
   brake_type?: string;

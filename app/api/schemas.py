@@ -23,7 +23,7 @@ class BikeSchema(BaseModel):
     brand: str
     model_name: str
     model_year: int | None
-    category: str
+    categories: list[str]
     wheel_size: str | None
     frame_material: str | None
     brake_type: str | None

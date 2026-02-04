@@ -56,7 +56,8 @@ if __name__ == "__main__":
 
             brand = "Kross"
             model_name = meta.get("model", "").strip()
-            category = " / ".join(meta.get("categories", []))
+            categories = meta.get("categories", [])
+            model_year = meta.get("model_year")
 
             if not model_name:
                 logger.warning("⚠️ Skipping file {}: missing model name in meta", item.name)
@@ -67,7 +68,6 @@ if __name__ == "__main__":
                 select(BikeMetaORM).where(
                     BikeMetaORM.brand == brand,
                     BikeMetaORM.model_name == model_name,
-                    BikeMetaORM.category == category,
                 )
             ).scalar_one_or_none()
 
@@ -75,15 +75,19 @@ if __name__ == "__main__":
                 bike_meta = BikeMetaORM(
                     brand=brand,
                     model_name=model_name,
-                    category=category,
+                    categories=categories,
+                    model_year=model_year,
                 )
                 session.add(bike_meta)
                 session.flush()  # to get bike_meta.id
                 bikes_created += 1
-                logger.debug("🆕 Created BikeMeta: {} {} ({})", brand, model_name, category)
+                logger.debug("🆕 Created BikeMeta: {} {} ({})", brand, model_name, categories)
             else:
                 bike_meta = result
-                logger.debug("♻️ Updating BikeMeta: {} {} ({})", brand, model_name, category)
+                bike_meta.categories = categories  # Update categories
+                if model_year:
+                    bike_meta.model_year = model_year
+                logger.debug("♻️ Updating BikeMeta: {} {} ({})", brand, model_name, categories)
 
             # Replace all existing geometries for this bike to keep data in sync
             session.execute(delete(BikeGeometryORM).where(BikeGeometryORM.bike_meta_id == bike_meta.id))

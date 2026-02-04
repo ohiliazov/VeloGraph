@@ -10,29 +10,37 @@ from app.core.models import BikeMetaORM
 INDEX_NAME = "bikes"
 
 
-def get_simple_type(category_str: str) -> str:
+def get_simple_types(categories: list[str]) -> list[str]:
     """Normalizes messy categories into strict filter types."""
-    if not category_str:
-        return "other"
+    if not categories:
+        return ["other"]
 
-    cat = category_str.lower()
+    results = set()
+    for category_str in categories:
+        cat = category_str.lower()
+        if "gravel" in cat:
+            results.add("gravel")
+        if "mtb" in cat or "górsk" in cat:
+            results.add("mtb")
+        if "trekking" in cat:
+            results.add("trekking")
+        if "cross" in cat:
+            results.add("cross")
+        if "szos" in cat or "road" in cat:
+            results.add("road")
+        if "miejsk" in cat or "city" in cat:
+            results.add("city")
+        if "dzieci" in cat or "kids" in cat or "junior" in cat:
+            results.add("kids")
+        if "turyst" in cat:
+            results.add("touring")
+        if "damsk" in cat or "women" in cat:
+            results.add("women")
 
-    if "gravel" in cat:
-        return "gravel"
-    if "mtb" in cat or "górskie" in cat:
-        return "mtb"
-    if "trekking" in cat:
-        return "trekking"
-    if "cross" in cat:
-        return "cross"
-    if "szosa" in cat or "road" in cat:
-        return "road"
-    if "miejskie" in cat or "city" in cat:
-        return "city"
-    if "dzieci" in cat or "kids" in cat or "junior" in cat:
-        return "kids"
+    if not results:
+        results.add("other")
 
-    return "other"
+    return sorted(list(results))
 
 
 def serialize_bike(bike) -> dict:
@@ -46,8 +54,8 @@ def serialize_bike(bike) -> dict:
             "model_name": bike.model_name,
             "model_year": bike.model_year,
             "frame_material": bike.frame_material,
-            "simple_type": get_simple_type(bike.category),  # Normalized
-            "category_original": bike.category,  # Original for display
+            "simple_type": get_simple_types(bike.categories),  # Normalized list
+            "category_original": " / ".join(bike.categories),  # For display
             # Nested Geometries
             "geometries": [
                 {

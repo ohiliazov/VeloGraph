@@ -5,22 +5,34 @@ import { Bike, SearchResult } from "../types";
 
 export default function BikeSearch() {
   const [query, setQuery] = useState("");
+  const [stackMin, setStackMin] = useState("");
+  const [stackMax, setStackMax] = useState("");
+  const [reachMin, setReachMin] = useState("");
+  const [reachMax, setReachMax] = useState("");
+  const [category, setCategory] = useState("");
   const [results, setResults] = useState<Bike[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const searchBikes = async (searchTerm: string) => {
+  const searchBikes = async () => {
     setLoading(true);
     try {
-      const url = searchTerm
-        ? `http://localhost:8000/api/bikes/search?q=${encodeURIComponent(
-            searchTerm,
-          )}`
+      const params = new URLSearchParams();
+      if (query) params.append("q", query);
+      if (stackMin) params.append("stack_min", stackMin);
+      if (stackMax) params.append("stack_max", stackMax);
+      if (reachMin) params.append("reach_min", reachMin);
+      if (reachMax) params.append("reach_max", reachMax);
+      if (category) params.append("category", category);
+
+      const isSearching = params.toString().length > 0;
+      const url = isSearching
+        ? `http://localhost:8000/api/bikes/search?${params.toString()}`
         : `http://localhost:8000/api/bikes/`;
 
       const res = await fetch(url);
       const data = await res.json();
 
-      if (searchTerm) {
+      if (isSearching) {
         setResults((data as SearchResult).items);
       } else {
         setResults(data as Bike[]);
@@ -33,30 +45,108 @@ export default function BikeSearch() {
   };
 
   useEffect(() => {
-    searchBikes("");
+    searchBikes();
   }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    searchBikes(query);
+    searchBikes();
   };
 
   return (
     <div className="w-full max-w-4xl mx-auto p-6">
-      <form onSubmit={handleSearch} className="mb-8 flex gap-2">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search bikes (e.g. Kross Esker)..."
-          className="flex-1 p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-        />
-        <button
-          type="submit"
-          className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm"
-        >
-          Search
-        </button>
+      <form
+        onSubmit={handleSearch}
+        className="mb-8 space-y-4 bg-white p-6 rounded-xl border border-gray-200 shadow-sm"
+      >
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search bikes (e.g. Kross Esker)..."
+            className="flex-1 p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+          />
+          <button
+            type="submit"
+            className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm"
+          >
+            Search
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase">
+              Stack Min
+            </label>
+            <input
+              type="number"
+              value={stackMin}
+              onChange={(e) => setStackMin(e.target.value)}
+              placeholder="e.g. 500"
+              className="w-full p-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-sm"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase">
+              Stack Max
+            </label>
+            <input
+              type="number"
+              value={stackMax}
+              onChange={(e) => setStackMax(e.target.value)}
+              placeholder="e.g. 650"
+              className="w-full p-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-sm"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase">
+              Reach Min
+            </label>
+            <input
+              type="number"
+              value={reachMin}
+              onChange={(e) => setReachMin(e.target.value)}
+              placeholder="e.g. 350"
+              className="w-full p-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-sm"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase">
+              Reach Max
+            </label>
+            <input
+              type="number"
+              value={reachMax}
+              onChange={(e) => setReachMax(e.target.value)}
+              placeholder="e.g. 450"
+              className="w-full p-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-sm"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase">
+              Category
+            </label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full p-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 outline-none text-sm bg-white"
+            >
+              <option value="">All Categories</option>
+              <option value="gravel">Gravel</option>
+              <option value="mtb">MTB</option>
+              <option value="road">Road</option>
+              <option value="trekking">Trekking</option>
+              <option value="cross">Cross</option>
+              <option value="city">City</option>
+              <option value="kids">Kids</option>
+              <option value="touring">Touring</option>
+              <option value="women">Women</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
       </form>
 
       {loading ? (
@@ -73,7 +163,9 @@ export default function BikeSearch() {
                   <h2 className="text-xl font-bold text-gray-900">
                     {bike.brand} {bike.model_name}
                   </h2>
-                  <p className="text-sm text-gray-500">{bike.category}</p>
+                  <p className="text-sm text-gray-500">
+                    {bike.categories.join(" / ")}
+                  </p>
                 </div>
                 {bike.model_year && (
                   <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-semibold">

@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -38,18 +39,35 @@ def extract_bike_data(html: str) -> dict[str, Any]:
         soup = BeautifulSoup(html, "html.parser")
 
     # --- 1. Extract Metadata (Always done) ---
-    bike_meta = {"brand": "", "model": "", "categories": []}
+    bike_meta = {"brand": "Kross", "model": "", "categories": [], "model_year": None}
     for prop in ["og:title", "og:url", "og:image"]:
         tag = soup.find("meta", property=prop)
         if tag and isinstance(tag, Tag):
             bike_meta[prop] = tag.get("content", "").strip()
 
-    for breadcrumb in soup.select("div.breadcrumbs ul li"):
-        attrs = breadcrumb.attrs["class"]
-        if attrs[1].startswith("category"):
-            bike_meta["categories"].append(breadcrumb.a.get_text(strip=True))
-        if attrs[1].startswith("product"):
-            bike_meta["model"] = breadcrumb.get_text(strip=True)
+    # Extract model name from og:title if it looks like "Model | Kross"
+    if "og:title" in bike_meta:
+        title = bike_meta["og:title"]
+        if " | " in title:
+            bike_meta["model"] = title.split(" | ")[0].strip()
+
+    breadcrumbs = soup.find("div", class_="product-breadcrumbs")
+    if breadcrumbs:
+        # Use a more robust split for the breadcrumb separator
+        raw_text = breadcrumbs.get_text(strip=True)
+        # The separator is usually something like " / " with non-breaking spaces
+        raw_cats = [c.strip() for c in re.split(r"\s*/\s*", raw_text)]
+        cleaned_cats = []
+        for c in raw_cats:
+            c = c.strip()
+            if not c:
+                continue
+            # Check if it's a year
+            if c.isdigit() and len(c) == 4 and 2000 <= int(c) <= 2100:
+                bike_meta["model_year"] = int(c)
+                continue
+            cleaned_cats.append(c)
+        bike_meta["categories"] = cleaned_cats
 
     # --- 2. Find the Geometry Table ---
     target_table = None

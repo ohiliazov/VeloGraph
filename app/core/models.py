@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, PositiveInt
-from sqlalchemy import ForeignKey
+from sqlalchemy import ARRAY, ForeignKey, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -7,7 +7,7 @@ class BikeMeta(BaseModel):
     model_config = {"populate_by_name": True, "from_attributes": True}
 
     brand: str
-    category: str
+    categories: list[str]
     model_name: str
     model_year: int | None = None
     wheel_size: str | None = None
@@ -98,7 +98,7 @@ class BikeMetaORM(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     brand: Mapped[str]
-    category: Mapped[str]
+    categories: Mapped[list[str]] = mapped_column(ARRAY(String))
     model_name: Mapped[str]
     model_year: Mapped[int | None]
     wheel_size: Mapped[str | None]
