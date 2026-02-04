@@ -1,5 +1,5 @@
+import argparse
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -229,58 +229,80 @@ def extract_bike_data(html: str) -> dict[str, Any]:
     return result
 
 
-if __name__ == "__main__":
-    kross_artifacts = artifacts_dir / "kross"
-    html_dir = kross_artifacts / "raw_htmls"
-    json_dir = kross_artifacts / "extracted_jsons"
+def process_file(html_path: Path, json_dir: Path, force: bool = False) -> bool:
+    """
+    Processes a single HTML file and saves it as JSON.
+    Returns True if processed, False if skipped.
+    """
+    try:
+        content = html_path.read_text(encoding="utf-8")
+        data = extract_bike_data(content)
+
+        if data["has_geometry"]:
+            # Remove the internal flag before saving to clean JSON
+            del data["has_geometry"]
+
+            json_path = json_dir / html_path.with_suffix(".json").name
+            if json_path.exists() and not force:
+                logger.debug(f"⚠️  Skipping {html_path.name}: JSON already exists")
+                return False
+
+            json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+            logger.debug(f"✅ Saved JSON: {json_path.name}")
+            return True
+        else:
+            logger.warning(f"⚠️  Skipped {html_path.name}: No geometry table found")
+            return False
+    except Exception:
+        logger.exception(f"🚨 Critical error processing {html_path.name}")
+        return False
+
+
+def process_directory(html_dir: Path, json_dir: Path, force: bool = False):
+    """
+    Processes all HTML files in a directory.
+    """
     json_dir.mkdir(parents=True, exist_ok=True)
-
-    if not html_dir.exists():
-        logger.error(f"❌ Directory '{html_dir}' not found. Please create it and add HTML files.")
-        sys.exit(1)
-
     logger.info(f"📂 Scanning directory: {html_dir}...")
 
     files_processed = 0
-    skipped_urls = []
+    total_files = 0
+    skipped_count = 0
 
     for html_path in html_dir.glob("*.html"):
-        try:
-            logger.info(f"🚴 Processing: {html_path.name}...")
-            content = html_path.read_text(encoding="utf-8")
+        total_files += 1
+        if process_file(html_path, json_dir, force):
+            files_processed += 1
+        else:
+            skipped_count += 1
 
-            data = extract_bike_data(content)
+    logger.success(f"🏁 Done. Total: {total_files} | Processed: {files_processed} | Skipped: {skipped_count}")
 
-            # Check the flag we created
-            if data["has_geometry"]:
-                # Remove the internal flag before saving to clean JSON
-                del data["has_geometry"]
 
-                json_path = json_dir / html_path.with_suffix(".json").name
-                if json_path.exists():
-                    logger.warning(f"⚠️  Skipping {html_path.name}: JSON already exists")
-                    continue
+def main():
+    parser = argparse.ArgumentParser(description="Extract Kross bike data from HTML files.")
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=artifacts_dir / "kross" / "raw_htmls",
+        help="Directory containing raw HTML files.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=artifacts_dir / "kross" / "extracted_jsons",
+        help="Directory to save extracted JSON files.",
+    )
+    parser.add_argument("--force", action="store_true", help="Overwrite existing JSON files.")
 
-                json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-                logger.success(f"✅ Saved JSON: {json_path.name}")
-                files_processed += 1
-            else:
-                # Now we can safely access meta because data is not None
-                url = data["meta"].get("og:url", f"UNKNOWN_URL_{html_path.name}")
-                logger.warning(f"⚠️  Skipped {html_path.name}: No geometry table found")
-                skipped_urls.append(url)
+    args = parser.parse_args()
 
-        except Exception:
-            logger.exception(f"🚨 Critical error processing {html_path.name}")
+    if not args.input.exists():
+        logger.error(f"❌ Input directory '{args.input}' not found.")
+        sys.exit(1)
 
-    logger.success(f"🏁 Done. Processed: {files_processed} | Skipped: {len(skipped_urls)}")
+    process_directory(args.input, args.output, args.force)
 
-    output_skipped = Path("skipped_urls.json")
 
-    if skipped_urls:
-        with open(output_skipped, "w", encoding="utf-8") as f:
-            json.dump(skipped_urls, f, indent=2, ensure_ascii=False)
-            logger.info(f"📝 Saved {len(skipped_urls)} skipped URLs to '{output_skipped}'")
-    elif output_skipped.exists():
-        logger.info("✅ No skipped URLs found")
-        os.remove(output_skipped)
+if __name__ == "__main__":
+    main()

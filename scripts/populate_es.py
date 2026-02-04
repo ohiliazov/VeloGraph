@@ -42,12 +42,12 @@ def serialize_bike(bike) -> dict:
     }
 
 
-def create_index(es):
+def create_index(es, index_name: str = INDEX_NAME):
     """Creates the index with the correct mapping if it doesn't exist."""
     mapping = {
         "mappings": {
             "properties": {
-                "brand": {"type": "text"},
+                "brand": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
                 "model_name": {"type": "text"},
                 "simple_type": {"type": "keyword"},  # FAST filtering
                 "model_year": {"type": "integer"},
@@ -68,46 +68,64 @@ def create_index(es):
         }
     }
 
-    if es.indices.exists(index=INDEX_NAME):
-        logger.info(f"🗑️ Index '{INDEX_NAME}' exists. Deleting to start fresh...")
-        es.indices.delete(index=INDEX_NAME)
+    if es.indices.exists(index=index_name):
+        logger.info(f"🗑️ Index '{index_name}' exists. Deleting to start fresh...")
+        es.indices.delete(index=index_name)
 
-    es.indices.create(index=INDEX_NAME, body=mapping)
-    logger.info(f"✅ Created index '{INDEX_NAME}'.")
+    es.indices.create(index=index_name, body=mapping)
+    logger.info(f"✅ Created index '{index_name}'.")
+
+
+def populate_index(es, session, index_name: str = INDEX_NAME):
+    """Fetches all bikes from DB and pushes them to ES."""
+    logger.info(f"🔍 Fetching bikes from PostgreSQL for index '{index_name}'...")
+
+    # selectinload is CRITICAL: it fetches all geometries in 1 extra query
+    # instead of 1 query per bike (N+1 problem).
+    stmt = select(BikeMetaORM).options(selectinload(BikeMetaORM.geometries))
+
+    bikes = session.scalars(stmt).all()
+    logger.info(f"📊 Found {len(bikes)} bikes. Serializing...")
+
+    # Prepare Generator for Bulk Indexing
+    def actions_generator():
+        for bike in bikes:
+            doc = serialize_bike(bike)
+            doc["_index"] = index_name
+            yield doc
+
+    # Execute Bulk Index
+    logger.info(f"🚀 Pushing to Elasticsearch index '{index_name}'...")
+    success, failed = helpers.bulk(es, actions_generator(), stats_only=True)
+
+    logger.info(f"🏁 Done! Successfully indexed: {success}, Failed: {failed}")
+    return success, failed
 
 
 def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Populate Elasticsearch index with bike data.")
+    parser.add_argument("--url", type=str, default=es_settings.url, help="Elasticsearch URL")
+    parser.add_argument("--index", type=str, default=INDEX_NAME, help="Elasticsearch index name")
+    parser.add_argument("--recreate", action="store_true", default=True, help="Recreate index if it exists")
+
+    args = parser.parse_args()
+
     # 1. Connect to DB and ES
-    es = Elasticsearch(es_settings.url)
+    es = Elasticsearch(args.url)
 
     if not es.ping():
-        logger.error("❌ Could not connect to Elasticsearch!")
+        logger.error(f"❌ Could not connect to Elasticsearch at {args.url}!")
         return
 
     # 2. Reset Index
-    create_index(es)
+    if args.recreate:
+        create_index(es, args.index)
 
-    # 3. Fetch Data (Optimized)
+    # 3. Fetch Data and Populate
     with SessionLocal() as session:
-        logger.info("🔍 Fetching bikes from PostgreSQL...")
-
-        # selectinload is CRITICAL: it fetches all geometries in 1 extra query
-        # instead of 1 query per bike (N+1 problem).
-        stmt = select(BikeMetaORM).options(selectinload(BikeMetaORM.geometries))
-
-        # If you have huge data (100k+), use yield_per or paging here.
-        # For standard catalogs (e.g. <10k bikes), .all() is fine.
-        bikes = session.scalars(stmt).all()
-        logger.info(f"📊 Found {len(bikes)} bikes. Serializing...")
-
-        # 4. Prepare Generator for Bulk Indexing
-        actions = (serialize_bike(bike) for bike in bikes)
-
-        # 5. Execute Bulk Index
-        logger.info("🚀 Pushing to Elasticsearch...")
-        success, failed = helpers.bulk(es, actions, stats_only=True)
-
-        logger.info(f"🏁 Done! Successfully indexed: {success}, Failed: {failed}")
+        populate_index(es, session, args.index)
 
 
 if __name__ == "__main__":
