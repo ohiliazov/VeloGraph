@@ -43,7 +43,7 @@ export default function BikeEditPage() {
   const handleGeometryChange = (
     index: number,
     field: keyof Geometry,
-    value: string | number,
+    value: string | number | string[],
   ) => {
     if (!bike) return;
     const newGeometries = [...bike.geometries];
@@ -139,6 +139,18 @@ export default function BikeEditPage() {
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium text-gray-700">
+                  {t.geometry.colors}
+                </label>
+                <input
+                  type="text"
+                  name="color"
+                  value={bike.color || ""}
+                  onChange={handleInputChange}
+                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-gray-700">
                   {t.ui.material}
                 </label>
                 <input
@@ -203,6 +215,19 @@ export default function BikeEditPage() {
                   onChange={handleInputChange}
                   className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
                   placeholder="https://..."
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-gray-700">
+                  {t.ui.max_tire_width} (mm)
+                </label>
+                <input
+                  type="number"
+                  name="max_tire_width"
+                  value={bike.max_tire_width || ""}
+                  onChange={handleInputChange}
+                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="e.g. 45"
                 />
               </div>
             </div>

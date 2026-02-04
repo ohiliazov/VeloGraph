@@ -105,6 +105,11 @@ export default function ComparisonPage() {
                             <p className="text-gray-500 font-medium normal-case">
                               {t.geometry.size_label}:{" "}
                               {item.geometry.size_label}
+                              {item.bike.color ? (
+                                <span className="ml-1 text-gray-400">
+                                  · {item.bike.color}
+                                </span>
+                              ) : null}
                             </p>
                           </div>
                           <button
@@ -120,7 +125,13 @@ export default function ComparisonPage() {
                           </button>
                         </div>
                         <div className="bg-gray-50 rounded p-2 flex justify-center">
-                          <BikeFrameSVG geometry={item.geometry} height={70} />
+                          <BikeFrameSVG
+                            geometry={item.geometry}
+                            wheelSize={item.bike.wheel_size}
+                            maxTireWidth={item.bike.max_tire_width}
+                            frameColor={item.bike.color}
+                            height={70}
+                          />
                         </div>
                       </div>
                     </th>

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { Bike, Geometry } from "../types";
+import { Bike, Geometry } from "@/types";
 
 export interface ComparisonItem {
   bike: Bike;

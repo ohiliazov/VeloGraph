@@ -1,32 +1,131 @@
 "use client";
 
 import React from "react";
-import { Geometry } from "../types";
+import { Geometry } from "@/types";
 
 interface BikeFrameSVGProps {
   geometry: Geometry;
+  wheelSize?: string;
+  maxTireWidth?: string;
   className?: string;
   width?: number;
   height?: number;
   showWheels?: boolean;
+  frameColor?: string | null;
+  jointAdjustments?: {
+    topToSeatDrop?: number;
+    topToHeadDrop?: number;
+    downToHeadRise?: number;
+  };
 }
 
-const FRAME_COLOR = "#2563eb"; // blue-600
+const DEFAULT_JOINTS = {
+  topToSeatDrop: 0.08,
+  topToHeadDrop: 0.07,
+  downToHeadRise: 0.1,
+};
+
+const DEFAULT_FRAME_COLOR = "#2563eb"; // blue-600
 const WHEEL_COLOR = "#94a3b8"; // slate-400
 const TIRE_COLOR = "#1e293b"; // slate-800
 const FRAME_TUBE_WIDTH = 25;
-const WHEEL_DIAMETER_MM = 622;
-const TIRE_WIDTH_MM = 30;
-const RIM_DEPTH_MM = 45;
-const MARGIN_PX = 4;
+const DEFAULT_WHEEL_DIAMETER_MM = 622;
+const DEFAULT_TIRE_WIDTH_MM = 30;
+const RIM_DEPTH_MM = 30;
+const MARGIN_PX = 10;
 const SCALE = 0.35;
+
+const WHEEL_SIZE_MAP: Record<string, number> = {
+  "700": 622,
+  "584": 584,
+  "559": 559,
+  "507": 507,
+  "406": 406,
+  "305": 305,
+  "254": 254,
+  "203": 203,
+  // Defensive inch-based keys
+  "29": 622,
+  "28": 622,
+  "27.5": 584,
+  "26": 559,
+  "24": 507,
+  "20": 406,
+  "16": 305,
+  "14": 254,
+  "12": 203,
+};
+
+function normalizeColor(input?: string | null): string | null {
+  if (!input) return null;
+  const s = String(input).trim();
+  // 1) Hex code in the text
+  const hex = s.match(/#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})/);
+  if (hex) return hex[0];
+
+  const lower = s.toLowerCase();
+  // 2) Basic mapping for common EN/PL color words
+  const map: Record<string, string> = {
+    black: "#000000",
+    czarny: "#000000",
+    white: "#ffffff",
+    biały: "#ffffff",
+    bialy: "#ffffff",
+    red: "#ef4444",
+    czerwony: "#ef4444",
+    blue: "#3b82f6",
+    niebieski: "#3b82f6",
+    green: "#22c55e",
+    zielony: "#22c55e",
+    gray: "#6b7280",
+    grey: "#6b7280",
+    szary: "#6b7280",
+    graphite: "#4b5563",
+    grafitowy: "#4b5563",
+    silver: "#9ca3af",
+    srebrny: "#9ca3af",
+    gold: "#eab308",
+    złoty: "#eab308",
+    zolty: "#eab308",
+    orange: "#f97316",
+    pomarańczowy: "#f97316",
+    pomaranczowy: "#f97316",
+    yellow: "#facc15",
+    purple: "#a855f7",
+    fioletowy: "#a855f7",
+    pink: "#ec4899",
+    różowy: "#ec4899",
+    rozowy: "#ec4899",
+    brown: "#92400e",
+    brązowy: "#92400e",
+    brazowy: "#92400e",
+    beige: "#f5f5dc",
+    navy: "#1e3a8a",
+    granatowy: "#1e3a8a",
+    turquoise: "#14b8a6",
+    turkusowy: "#14b8a6",
+    teal: "#0d9488",
+  };
+
+  // Try token-wise
+  const tokens = lower.split(/[\s,\/\-]+/);
+  for (const tok of tokens) {
+    if (map[tok]) return map[tok];
+  }
+  // Last resort: return the raw string and let the browser try
+  return s;
+}
 
 export default function BikeFrameSVG({
   geometry,
+  wheelSize,
+  maxTireWidth,
   className = "",
   width,
   height,
-  showWheels = false,
+  showWheels = true,
+  frameColor,
+  jointAdjustments,
 }: BikeFrameSVGProps) {
   // Inputs
   const {
@@ -40,6 +139,13 @@ export default function BikeFrameSVG({
     head_tube_angle: headAngle,
     wheelbase,
   } = geometry;
+
+  // Wheel and Tire dimensions
+  const wheelDiameter =
+    (wheelSize && WHEEL_SIZE_MAP[wheelSize]) || DEFAULT_WHEEL_DIAMETER_MM;
+  const tireWidth = maxTireWidth
+    ? parseFloat(maxTireWidth)
+    : DEFAULT_TIRE_WIDTH_MM;
 
   // Compute points (relative to BB at 0,0)
   // Note: Y is positive upwards in math, but positive downwards in SVG.
@@ -63,7 +169,7 @@ export default function BikeFrameSVG({
   };
 
   // Canvas calculation
-  const wheelRadius = (WHEEL_DIAMETER_MM + TIRE_WIDTH_MM) / 2;
+  const wheelRadius = (wheelDiameter + tireWidth) / 2;
   const xs = [
     points.rear_axle[0] - (showWheels ? wheelRadius : 0),
     points.front_axle[0] + (showWheels ? wheelRadius : 0),
@@ -131,11 +237,43 @@ export default function BikeFrameSVG({
   const pHeadTop = p(points.head_top);
   const pHeadBottom = p(points.head_bottom);
 
-  const wheelR = ((WHEEL_DIAMETER_MM + TIRE_WIDTH_MM) / 2) * currentScale;
-  const rimR = ((WHEEL_DIAMETER_MM - RIM_DEPTH_MM) / 2) * currentScale;
-  const tireW = TIRE_WIDTH_MM * currentScale;
+  // Joint adjustments
+  const J = { ...DEFAULT_JOINTS, ...jointAdjustments };
+  const sub = (a: number[], b: number[]) => [a[0] - b[0], a[1] - b[1]];
+  const add = (a: number[], b: number[]) => [a[0] + b[0], a[1] + b[1]];
+  const mul = (v: number[], s: number) => [v[0] * s, v[1] * s];
+  const norm = (v: number[]) => {
+    const L = Math.hypot(v[0], v[1]) || 1;
+    return [v[0] / L, v[1] / L];
+  };
+
+  const uSeat = norm(sub(points.seat_top, points.bb));
+  const uHead = norm(sub(points.head_top, points.head_bottom));
+
+  const seatJoint = add(
+    points.seat_top,
+    mul(uSeat, -J.topToSeatDrop * seatTube),
+  );
+  const headTopJoint = add(
+    points.head_top,
+    mul(uHead, -J.topToHeadDrop * headTube),
+  );
+  const headBottomJoint = add(
+    points.head_bottom,
+    mul(uHead, J.downToHeadRise * headTube),
+  );
+
+  const pSeatJoint = p(seatJoint);
+  const pHeadTopJoint = p(headTopJoint);
+  const pHeadBottomJoint = p(headBottomJoint);
+
+  const wheelR = ((wheelDiameter + tireWidth) / 2) * currentScale;
+  const rimR = ((wheelDiameter - RIM_DEPTH_MM) / 2) * currentScale;
+  const tireW = tireWidth * currentScale;
   const rimW = RIM_DEPTH_MM * currentScale;
   const tubeW = Math.max(FRAME_TUBE_WIDTH * currentScale, 1.5);
+
+  const FRAME_COLOR = normalizeColor(frameColor) || DEFAULT_FRAME_COLOR;
 
   return (
     <svg
@@ -205,8 +343,8 @@ export default function BikeFrameSVG({
       />
       {/* Seat Stay */}
       <line
-        x1={pSeatTop[0]}
-        y1={pSeatTop[1]}
+        x1={pSeatJoint[0]}
+        y1={pSeatJoint[1]}
         x2={pRear[0]}
         y2={pRear[1]}
         stroke={FRAME_COLOR}
@@ -217,18 +355,18 @@ export default function BikeFrameSVG({
       <line
         x1={pBB[0]}
         y1={pBB[1]}
-        x2={pHeadBottom[0]}
-        y2={pHeadBottom[1]}
+        x2={pHeadBottomJoint[0]}
+        y2={pHeadBottomJoint[1]}
         stroke={FRAME_COLOR}
         strokeWidth={tubeW}
         strokeLinecap="round"
       />
       {/* Top Tube */}
       <line
-        x1={pSeatTop[0]}
-        y1={pSeatTop[1]}
-        x2={pHeadTop[0]}
-        y2={pHeadTop[1]}
+        x1={pSeatJoint[0]}
+        y1={pSeatJoint[1]}
+        x2={pHeadTopJoint[0]}
+        y2={pHeadTopJoint[1]}
         stroke={FRAME_COLOR}
         strokeWidth={tubeW}
         strokeLinecap="round"
@@ -257,20 +395,20 @@ export default function BikeFrameSVG({
       {/* Joints */}
       <circle cx={pBB[0]} cy={pBB[1]} r={tubeW / 2} fill={FRAME_COLOR} />
       <circle
-        cx={pSeatTop[0]}
-        cy={pSeatTop[1]}
+        cx={pSeatJoint[0]}
+        cy={pSeatJoint[1]}
         r={tubeW / 2}
         fill={FRAME_COLOR}
       />
       <circle
-        cx={pHeadTop[0]}
-        cy={pHeadTop[1]}
+        cx={pHeadTopJoint[0]}
+        cy={pHeadTopJoint[1]}
         r={tubeW / 2}
         fill={FRAME_COLOR}
       />
       <circle
-        cx={pHeadBottom[0]}
-        cy={pHeadBottom[1]}
+        cx={pHeadBottomJoint[0]}
+        cy={pHeadBottomJoint[1]}
         r={tubeW / 2}
         fill={FRAME_COLOR}
       />

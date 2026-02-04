@@ -10,10 +10,12 @@ class BikeMeta(BaseModel):
     categories: list[str]
     model_name: str
     model_year: int | None = None
+    color: str | None = None
     wheel_size: str | None = None
     frame_material: str | None = None
     brake_type: str | None = None
     source_url: str | None = None
+    max_tire_width: str | None = None
 
 
 class BikeGeometry(BaseModel):
@@ -102,10 +104,12 @@ class BikeMetaORM(Base):
     categories: Mapped[list[str]] = mapped_column(ARRAY(String))
     model_name: Mapped[str]
     model_year: Mapped[int | None]
+    color: Mapped[str | None]
     wheel_size: Mapped[str | None]
     frame_material: Mapped[str | None]
     brake_type: Mapped[str | None]
     source_url: Mapped[str | None]
+    max_tire_width: Mapped[str | None]
 
     geometries: Mapped[list[BikeGeometryORM]] = relationship(back_populates="bike_meta", cascade="all, delete-orphan")
 

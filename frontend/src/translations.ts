@@ -26,6 +26,7 @@ export const translations = {
       bb_drop: "BB Drop",
       wheelbase: "Wheelbase",
       size_label: "Size",
+      colors: "Color",
     },
     ui: {
       search_placeholder: "Search bikes (e.g. Kross Esker)...",
@@ -45,6 +46,7 @@ export const translations = {
       brake_type: "Brake Type",
       metadata: "Metadata",
       geometry_details: "Geometry Details",
+      max_tire_width: "Max Tire Width",
       edit: "Edit",
       back_to_details: "Back to bike details",
       stack_min: "Stack Min",
@@ -103,6 +105,7 @@ export const translations = {
       bb_drop: "Провис каретки",
       wheelbase: "Колісна база",
       size_label: "Розмір",
+      colors: "Колір",
     },
     ui: {
       search_placeholder: "Пошук велосипедів (напр. Kross Esker)...",
@@ -122,6 +125,7 @@ export const translations = {
       brake_type: "Тип гальм",
       metadata: "Метадані",
       geometry_details: "Деталі геометрії",
+      max_tire_width: "Макс. ширина покришки",
       edit: "Редагувати",
       back_to_details: "Назад до деталей",
       stack_min: "Стек мін.",

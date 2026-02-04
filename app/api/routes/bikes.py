@@ -136,11 +136,13 @@ async def update_bike(
     bike.brand = bike_update.brand
     bike.model_name = bike_update.model_name
     bike.model_year = bike_update.model_year
+    bike.color = bike_update.color
     bike.categories = bike_update.categories
     bike.wheel_size = bike_update.wheel_size
     bike.frame_material = bike_update.frame_material
     bike.brake_type = bike_update.brake_type
     bike.source_url = bike_update.source_url
+    bike.max_tire_width = bike_update.max_tire_width
 
     # Simple approach for geometries: replace them all
     # Delete existing geometries
@@ -172,8 +174,10 @@ async def update_bike(
         "brand": bike.brand,
         "model_name": bike.model_name,
         "model_year": bike.model_year,
+        "color": bike.color,
         "frame_material": bike.frame_material,
         "source_url": bike.source_url,
+        "max_tire_width": bike.max_tire_width,
         "simple_type": get_simple_types(bike.categories),
         "category_original": " / ".join(bike.categories),
         "geometries": [

@@ -3,10 +3,9 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import BikeFrameSVG from "./BikeFrameSVG";
-import { Bike, SearchResult } from "../types";
-import { useLanguage } from "../context/LanguageContext";
-import { useComparison } from "../context/ComparisonContext";
-import { translations } from "../translations";
+import { Bike, SearchResult } from "@/types";
+import { useLanguage } from "@/context/LanguageContext";
+import { useComparison } from "@/context/ComparisonContext";
 
 export default function BikeSearch() {
   const { t } = useLanguage();
@@ -193,6 +192,11 @@ export default function BikeSearch() {
                         • {t.wheel_sizes[bike.wheel_size] || bike.wheel_size}
                       </span>
                     )}
+                    {bike.color && (
+                      <span className="ml-2 text-xs text-gray-400">
+                        • {bike.color}
+                      </span>
+                    )}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
@@ -224,6 +228,9 @@ export default function BikeSearch() {
                 <div className="mb-4 bg-gray-50 rounded-lg flex justify-center p-2">
                   <BikeFrameSVG
                     geometry={bike.geometries[0]}
+                    wheelSize={bike.wheel_size}
+                    maxTireWidth={bike.max_tire_width}
+                    frameColor={bike.color}
                     height={100}
                     className="max-w-full"
                   />
@@ -251,10 +258,13 @@ export default function BikeSearch() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {bike.geometries.map((g) => {
+                      {bike.geometries.map((g, idx) => {
                         const inCompare = isInComparison(bike.id, g.size_label);
                         return (
-                          <tr key={g.size_label} className="text-gray-700">
+                          <tr
+                            key={`${bike.id}-${g.size_label}-${idx}`}
+                            className="text-gray-700"
+                          >
                             <td className="py-2 pr-2 font-medium">
                               {g.size_label}
                             </td>

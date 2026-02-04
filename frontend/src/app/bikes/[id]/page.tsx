@@ -91,7 +91,13 @@ export default function BikeDetailPage() {
         </header>
 
         <div className="bg-white p-8 rounded-xl border border-gray-200 shadow-sm mb-12 flex justify-center">
-          <BikeFrameSVG geometry={bike.geometries[0]} height={200} />
+          <BikeFrameSVG
+            geometry={bike.geometries[0]}
+            wheelSize={bike.wheel_size}
+            maxTireWidth={bike.max_tire_width}
+            frameColor={bike.color}
+            height={200}
+          />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
@@ -143,6 +149,22 @@ export default function BikeDetailPage() {
               {bike.brake_type || "N/A"}
             </p>
           </div>
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">
+              {t.ui.max_tire_width}
+            </h3>
+            <p className="text-lg font-medium text-gray-900">
+              {bike.max_tire_width ? `${bike.max_tire_width} mm` : "N/A"}
+            </p>
+          </div>
+          <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+            <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">
+              {t.geometry.colors}
+            </h3>
+            <p className="text-lg font-medium text-gray-900">
+              {bike.color || "N/A"}
+            </p>
+          </div>
           {bike.source_url && (
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
               <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">
@@ -167,56 +189,80 @@ export default function BikeDetailPage() {
             </h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm text-left">
+            <table className="min-w-full text-sm text-left border-collapse">
               <thead>
-                <tr className="bg-gray-50 text-gray-500 uppercase text-xs font-semibold">
-                  <th className="py-4 px-6">{t.ui.geometries}</th>
-                  <th className="py-4 px-6">{t.geometry.size_label}</th>
-                  <th className="py-4 px-6">{t.geometry.stack}</th>
-                  <th className="py-4 px-6">{t.geometry.reach}</th>
-                  <th className="py-4 px-6">
-                    {t.geometry.top_tube_effective_length}
+                <tr className="bg-gray-50 text-gray-500 uppercase text-xs font-semibold border-b">
+                  <th className="py-4 px-6 border-r sticky left-0 bg-gray-50 z-10 w-48">
+                    {t.ui.geometry_details}
                   </th>
-                  <th className="py-4 px-6">{t.geometry.seat_tube_length}</th>
-                  <th className="py-4 px-6">{t.geometry.head_tube_angle}</th>
-                  <th className="py-4 px-6">{t.geometry.seat_tube_angle}</th>
-                  <th className="py-4 px-6">{t.geometry.wheelbase}</th>
-                  <th className="py-4 px-6"></th>
+                  {bike.geometries.map((geo, index) => (
+                    <th
+                      key={`${bike.id}-${geo.size_label}-${index}`}
+                      className="py-4 px-6 text-center border-r min-w-[120px]"
+                    >
+                      <div className="flex flex-col items-center gap-2">
+                        <span className="text-base font-bold text-gray-900 normal-case">
+                          {geo.size_label}
+                        </span>
+                        <div className="bg-gray-100 rounded p-1 flex justify-center">
+                          <BikeFrameSVG
+                            geometry={geo}
+                            wheelSize={bike.wheel_size}
+                            maxTireWidth={bike.max_tire_width}
+                            height={40}
+                          />
+                        </div>
+                      </div>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {bike.geometries.map((geo, index) => {
-                  const inCompare = isInComparison(bike.id, geo.size_label);
-                  return (
-                    <tr
-                      key={index}
-                      className="hover:bg-gray-50 transition-colors"
-                    >
-                      <td className="py-2 px-6">
-                        <div className="bg-gray-100 rounded p-1 flex justify-center w-20">
-                          <BikeFrameSVG geometry={geo} height={40} />
-                        </div>
+                {(
+                  [
+                    "stack",
+                    "reach",
+                    "top_tube_effective_length",
+                    "seat_tube_length",
+                    "head_tube_angle",
+                    "seat_tube_angle",
+                    "wheelbase",
+                  ] as (keyof typeof t.geometry)[]
+                ).map((key) => (
+                  <tr key={key} className="hover:bg-gray-50 transition-colors">
+                    <td className="py-3 px-6 font-medium text-gray-500 bg-gray-50/30 border-r sticky left-0 z-10">
+                      {t.geometry[key]}
+                    </td>
+                    {bike.geometries.map((geo, index) => (
+                      <td
+                        key={`${bike.id}-${geo.size_label}-${index}-${key}`}
+                        className="py-3 px-6 text-center border-r font-mono text-gray-700"
+                      >
+                        {geo[key as keyof typeof geo]}
+                        {String(key).includes("angle") ? "°" : " mm"}
                       </td>
-                      <td className="py-4 px-6 font-bold text-gray-900 bg-gray-50/50">
-                        {geo.size_label}
-                      </td>
-                      <td className="py-4 px-6">{geo.stack} mm</td>
-                      <td className="py-4 px-6">{geo.reach} mm</td>
-                      <td className="py-4 px-6">
-                        {geo.top_tube_effective_length} mm
-                      </td>
-                      <td className="py-4 px-6">{geo.seat_tube_length} mm</td>
-                      <td className="py-4 px-6">{geo.head_tube_angle}°</td>
-                      <td className="py-4 px-6">{geo.seat_tube_angle}°</td>
-                      <td className="py-4 px-6">{geo.wheelbase} mm</td>
-                      <td className="py-4 px-6 text-right">
+                    ))}
+                  </tr>
+                ))}
+                {/* Comparison Actions Row */}
+                <tr className="hover:bg-gray-50 transition-colors">
+                  <td className="py-4 px-6 font-medium text-gray-500 bg-gray-50/30 border-r sticky left-0 z-10">
+                    {t.ui.compare}
+                  </td>
+                  {bike.geometries.map((geo, index) => {
+                    const inCompare = isInComparison(bike.id, geo.size_label);
+                    return (
+                      <td
+                        key={`${bike.id}-${geo.size_label}-${index}-action`}
+                        className="py-4 px-6 text-center border-r"
+                      >
                         <button
                           onClick={() =>
                             inCompare
                               ? removeFromCompare(bike.id, geo.size_label)
                               : addToCompare(bike, geo)
                           }
-                          className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                          className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors w-full ${
                             inCompare
                               ? "bg-red-100 text-red-600 hover:bg-red-200"
                               : "bg-blue-100 text-blue-600 hover:bg-blue-200"
@@ -227,9 +273,9 @@ export default function BikeDetailPage() {
                             : t.ui.add_to_compare}
                         </button>
                       </td>
-                    </tr>
-                  );
-                })}
+                    );
+                  })}
+                </tr>
               </tbody>
             </table>
           </div>

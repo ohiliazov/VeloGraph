@@ -21,8 +21,10 @@ def serialize_bike(bike) -> dict:
             "brand": bike.brand,
             "model_name": bike.model_name,
             "model_year": bike.model_year,
+            "color": bike.color,
             "frame_material": bike.frame_material,
             "source_url": bike.source_url,
+            "max_tire_width": bike.max_tire_width,
             "simple_type": get_simple_types(bike.categories),  # Normalized list
             "category_original": " / ".join(bike.categories),  # For display
             # Nested Geometries
@@ -50,7 +52,9 @@ def create_index(es, index_name: str = INDEX_NAME):
             "properties": {
                 "brand": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
                 "model_name": {"type": "text"},
+                "color": {"type": "keyword"},
                 "source_url": {"type": "keyword", "index": False},
+                "max_tire_width": {"type": "keyword", "index": False},
                 "simple_type": {"type": "keyword"},  # FAST filtering
                 "model_year": {"type": "integer"},
                 "geometries": {
