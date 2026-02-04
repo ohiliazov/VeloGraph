@@ -162,6 +162,27 @@ export default function ComparisonPage() {
                     </td>
                   ))}
                 </tr>
+                <tr className="hover:bg-gray-50 transition-colors">
+                  <td className="py-3 px-6 font-medium text-gray-500 bg-gray-50/30 border-r sticky left-0 z-10">
+                    {t.ui.source_page}
+                  </td>
+                  {comparisonList.map((item, idx) => (
+                    <td key={idx} className="py-3 px-6 border-r text-xs">
+                      {item.bike.source_url ? (
+                        <a
+                          href={item.bike.source_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          {t.ui.source_page} ↗
+                        </a>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                  ))}
+                </tr>
 
                 {/* Geometry Params */}
                 {filteredKeys.map((key) => (

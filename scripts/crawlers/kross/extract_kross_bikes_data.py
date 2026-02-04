@@ -85,11 +85,15 @@ def extract_bike_data(html: str) -> dict[str, Any]:
         "model_year": None,
         "wheel_size": None,
         "max_tire_width": None,
+        "source_url": "",
     }
     for prop in ["og:title", "og:url", "og:image"]:
         tag = soup.find("meta", property=prop)
         if tag and isinstance(tag, Tag):
-            bike_meta[prop] = tag.get("content", "").strip()
+            content = tag.get("content", "").strip()
+            bike_meta[prop] = content
+            if prop == "og:url":
+                bike_meta["source_url"] = content
 
     # Extract model name from og:title if it looks like "Model | Kross"
     if "og:title" in bike_meta:

@@ -13,6 +13,7 @@ class BikeMeta(BaseModel):
     wheel_size: str | None = None
     frame_material: str | None = None
     brake_type: str | None = None
+    source_url: str | None = None
 
 
 class BikeGeometry(BaseModel):
@@ -104,6 +105,7 @@ class BikeMetaORM(Base):
     wheel_size: Mapped[str | None]
     frame_material: Mapped[str | None]
     brake_type: Mapped[str | None]
+    source_url: Mapped[str | None]
 
     geometries: Mapped[list[BikeGeometryORM]] = relationship(back_populates="bike_meta", cascade="all, delete-orphan")
 

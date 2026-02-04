@@ -63,6 +63,7 @@ export const translations = {
       show_only_differences: "Show only differences",
       no_bikes_to_compare: "No bikes selected for comparison.",
       clear_comparison: "Clear All",
+      source_page: "Source Page",
     },
     wheel_sizes: {
       "700": '700C / 28" / 29"',
@@ -139,6 +140,7 @@ export const translations = {
       show_only_differences: "Показати лише різницю",
       no_bikes_to_compare: "Велосипеди для порівняння не вибрані.",
       clear_comparison: "Очистити все",
+      source_page: "Сторінка виробника",
     },
     wheel_sizes: {
       "700": '700C / 28" / 29"',

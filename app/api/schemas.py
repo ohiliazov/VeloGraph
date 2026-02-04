@@ -26,6 +26,7 @@ class BikeSchema(BaseModel):
     wheel_size: str | None = None
     frame_material: str | None = None
     brake_type: str | None = None
+    source_url: str | None = None
     geometries: list[GeometrySchema]
 
     model_config = ConfigDict(from_attributes=True)
@@ -55,6 +56,7 @@ class BikeUpdateSchema(BaseModel):
     wheel_size: str | None = None
     frame_material: str | None = None
     brake_type: str | None = None
+    source_url: str | None = None
     geometries: list[GeometryUpdateSchema]
 
 

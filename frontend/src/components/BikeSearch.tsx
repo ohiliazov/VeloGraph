@@ -207,6 +207,16 @@ export default function BikeSearch() {
                   >
                     {t.ui.edit}
                   </Link>
+                  {bike.source_url && (
+                    <a
+                      href={bike.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs bg-gray-100 text-gray-500 hover:text-blue-600 px-2 py-1 rounded transition-colors"
+                    >
+                      {t.ui.source_page} ↗
+                    </a>
+                  )}
                 </div>
               </div>
 

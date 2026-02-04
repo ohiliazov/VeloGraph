@@ -192,6 +192,19 @@ export default function BikeEditPage() {
                   className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-gray-700">
+                  {t.ui.source_page} (URL)
+                </label>
+                <input
+                  type="url"
+                  name="source_url"
+                  value={bike.source_url || ""}
+                  onChange={handleInputChange}
+                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                  placeholder="https://..."
+                />
+              </div>
             </div>
           </section>
 

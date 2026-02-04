@@ -56,6 +56,8 @@ def populate_from_json(session: Session, json_path: Path):
     categories = meta.get("categories", [])
     model_year = meta.get("model_year")
     wheel_size = meta.get("wheel_size")
+    # Prefer explicit source_url, fallback to Open Graph URL if available
+    source_url = meta.get("source_url") or meta.get("og:url")
 
     if not model_name:
         logger.warning("⚠️ Skipping file {}: missing model name in meta", json_path.name)
@@ -76,6 +78,7 @@ def populate_from_json(session: Session, json_path: Path):
             categories=categories,
             model_year=model_year,
             wheel_size=str(wheel_size) if wheel_size else None,
+            source_url=source_url,
         )
         session.add(bike_meta)
         session.flush()  # to get bike_meta.id
@@ -87,6 +90,8 @@ def populate_from_json(session: Session, json_path: Path):
             bike_meta.model_year = model_year
         if wheel_size:
             bike_meta.wheel_size = str(wheel_size)
+        if source_url:
+            bike_meta.source_url = source_url
         logger.debug("♻️ Updating BikeMeta: {} {} ({})", brand, model_name, categories)
 
     # Replace all existing geometries for this bike to keep data in sync

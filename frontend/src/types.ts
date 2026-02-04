@@ -21,6 +21,7 @@ export interface Bike {
   wheel_size?: string;
   frame_material?: string;
   brake_type?: string;
+  source_url?: string;
   geometries: Geometry[];
 }
 

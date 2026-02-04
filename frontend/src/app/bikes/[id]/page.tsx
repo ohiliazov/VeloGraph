@@ -65,6 +65,16 @@ export default function BikeDetailPage() {
             >
               {t.ui.edit_bike}
             </Link>
+            {bike.source_url && (
+              <a
+                href={bike.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-gray-800 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-900 transition-colors shadow-sm inline-flex items-center gap-2"
+              >
+                {t.ui.source_page} ↗
+              </a>
+            )}
           </div>
         </div>
 
@@ -133,6 +143,21 @@ export default function BikeDetailPage() {
               {bike.brake_type || "N/A"}
             </p>
           </div>
+          {bike.source_url && (
+            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                {t.ui.source_page}
+              </h3>
+              <a
+                href={bike.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-lg font-medium text-blue-600 hover:underline inline-flex items-center gap-1"
+              >
+                {t.ui.source_page} ↗
+              </a>
+            </div>
+          )}
         </div>
 
         <section className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
