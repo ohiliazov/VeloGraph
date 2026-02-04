@@ -13,13 +13,17 @@ annotated-types==0.7.0
 anyio==4.12.1
     # via
     #   elasticsearch
+    #   httpx
     #   starlette
 attrs==25.4.0
     # via aiohttp
 beautifulsoup4==4.14.3
     # via velograph
 certifi==2026.1.4
-    # via elastic-transport
+    # via
+    #   elastic-transport
+    #   httpcore
+    #   httpx
 cfgv==3.5.0
     # via pre-commit
 click==8.3.1
@@ -28,6 +32,7 @@ colorama==0.4.6 ; sys_platform == 'win32'
     # via
     #   click
     #   loguru
+    #   pytest
 distlib==0.4.0
     # via virtualenv
 elastic-transport==9.2.1
@@ -47,13 +52,21 @@ greenlet==3.3.1
     #   playwright
     #   sqlalchemy
 h11==0.16.0
-    # via uvicorn
+    # via
+    #   httpcore
+    #   uvicorn
+httpcore==1.0.9
+    # via httpx
+httpx==0.28.1
 identify==2.6.16
     # via pre-commit
 idna==3.11
     # via
     #   anyio
+    #   httpx
     #   yarl
+iniconfig==2.3.0
+    # via pytest
 loguru==0.7.3
     # via velograph
 lxml==6.0.2
@@ -64,10 +77,14 @@ multidict==6.7.1
     #   yarl
 nodeenv==1.10.0
     # via pre-commit
+packaging==26.0
+    # via pytest
 platformdirs==4.5.1
     # via virtualenv
 playwright==1.58.0
     # via velograph
+pluggy==1.6.0
+    # via pytest
 pre-commit==4.5.1
 propcache==0.4.1
     # via
@@ -85,6 +102,9 @@ pydantic-settings==2.12.0
     # via velograph
 pyee==13.0.0
     # via playwright
+pygments==2.19.2
+    # via pytest
+pytest==9.0.2
 python-dateutil==2.9.0.post0
     # via elasticsearch
 python-dotenv==1.2.1

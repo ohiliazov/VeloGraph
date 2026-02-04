@@ -1,14 +1,15 @@
 from typing import Annotated
 
 from elasticsearch import AsyncElasticsearch
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.schemas import BikeSchema, SearchResult
+from app.api.schemas import BikeSchema, BikeUpdateSchema, SearchResult
 from app.core.db import get_db
 from app.core.elasticsearch import get_es_client
-from app.core.models import BikeMetaORM
+from app.core.models import BikeGeometryORM, BikeMetaORM
+from app.core.utils import get_simple_types
 
 router = APIRouter()
 
@@ -115,4 +116,78 @@ async def search_bikes(
 def get_bike(bike_id: int, db: Annotated[Session, Depends(get_db)]):
     stmt = select(BikeMetaORM).where(BikeMetaORM.id == bike_id).options(selectinload(BikeMetaORM.geometries))
     bike = db.scalar(stmt)
+    if not bike:
+        raise HTTPException(status_code=404, detail="Bike not found")
+    return bike
+
+
+@router.put("/{bike_id}", response_model=BikeSchema)
+async def update_bike(
+    bike_id: int,
+    bike_update: BikeUpdateSchema,
+    db: Annotated[Session, Depends(get_db)],
+    es: Annotated[AsyncElasticsearch, Depends(get_es_client)],
+):
+    stmt = select(BikeMetaORM).where(BikeMetaORM.id == bike_id).options(selectinload(BikeMetaORM.geometries))
+    bike = db.scalar(stmt)
+    if not bike:
+        raise HTTPException(status_code=404, detail="Bike not found")
+
+    bike.brand = bike_update.brand
+    bike.model_name = bike_update.model_name
+    bike.model_year = bike_update.model_year
+    bike.categories = bike_update.categories
+    bike.wheel_size = bike_update.wheel_size
+    bike.frame_material = bike_update.frame_material
+    bike.brake_type = bike_update.brake_type
+
+    # Simple approach for geometries: replace them all
+    # Delete existing geometries
+    bike.geometries = []
+    # Add new ones
+    for geo_update in bike_update.geometries:
+        new_geo = BikeGeometryORM(
+            bike_meta_id=bike.id,
+            size_label=geo_update.size_label,
+            stack=geo_update.stack,
+            reach=geo_update.reach,
+            top_tube_effective_length=geo_update.top_tube_effective_length,
+            seat_tube_length=geo_update.seat_tube_length,
+            head_tube_length=geo_update.head_tube_length,
+            chainstay_length=geo_update.chainstay_length,
+            head_tube_angle=geo_update.head_tube_angle,
+            seat_tube_angle=geo_update.seat_tube_angle,
+            bb_drop=geo_update.bb_drop,
+            wheelbase=geo_update.wheelbase,
+        )
+        bike.geometries.append(new_geo)
+
+    db.commit()
+    db.refresh(bike)
+
+    # Sync to Elasticsearch
+    es_doc = {
+        "id": bike.id,
+        "brand": bike.brand,
+        "model_name": bike.model_name,
+        "model_year": bike.model_year,
+        "frame_material": bike.frame_material,
+        "simple_type": get_simple_types(bike.categories),
+        "category_original": " / ".join(bike.categories),
+        "geometries": [
+            {
+                "size_label": geo.size_label,
+                "stack": geo.stack,
+                "reach": geo.reach,
+                "top_tube_effective_length": geo.top_tube_effective_length,
+                "seat_tube_length": geo.seat_tube_length,
+                "head_tube_angle": geo.head_tube_angle,
+                "seat_tube_angle": geo.seat_tube_angle,
+                "wheelbase": geo.wheelbase,
+            }
+            for geo in bike.geometries
+        ],
+    }
+    await es.index(index="bikes", id=str(bike.id), document=es_doc, refresh=True)
+
     return bike
