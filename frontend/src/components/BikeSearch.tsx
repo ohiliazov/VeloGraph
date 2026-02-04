@@ -2,12 +2,16 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import BikeFrameSVG from "./BikeFrameSVG";
 import { Bike, SearchResult } from "../types";
 import { useLanguage } from "../context/LanguageContext";
+import { useComparison } from "../context/ComparisonContext";
 import { translations } from "../translations";
 
 export default function BikeSearch() {
   const { t } = useLanguage();
+  const { addToCompare, removeFromCompare, isInComparison, comparisonList } =
+    useComparison();
   const [query, setQuery] = useState("");
   const [stackMin, setStackMin] = useState("");
   const [stackMax, setStackMax] = useState("");
@@ -77,6 +81,14 @@ export default function BikeSearch() {
           >
             {t.ui.search_button}
           </button>
+          {comparisonList.length > 0 && (
+            <Link
+              href="/compare"
+              className="bg-green-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-green-700 transition-colors shadow-sm flex items-center gap-2"
+            >
+              {t.ui.compare} ({comparisonList.length})
+            </Link>
+          )}
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -160,7 +172,7 @@ export default function BikeSearch() {
               className="border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow bg-white"
             >
               <div className="flex justify-between items-start mb-4">
-                <div>
+                <div className="flex-1">
                   <h2 className="text-xl font-bold text-gray-900">
                     <Link
                       href={`/bikes/${bike.id}`}
@@ -193,6 +205,16 @@ export default function BikeSearch() {
                 </div>
               </div>
 
+              {bike.geometries.length > 0 && (
+                <div className="mb-4 bg-gray-50 rounded-lg flex justify-center p-2">
+                  <BikeFrameSVG
+                    geometry={bike.geometries[0]}
+                    height={100}
+                    className="max-w-full"
+                  />
+                </div>
+              )}
+
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-gray-700 border-b pb-1">
                   {t.ui.geometries}
@@ -210,20 +232,42 @@ export default function BikeSearch() {
                         <th className="py-1 px-2">
                           {t.geometry.seat_tube_angle} (SA)
                         </th>
+                        <th className="py-1 pl-2 text-right"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {bike.geometries.map((g) => (
-                        <tr key={g.size_label} className="text-gray-700">
-                          <td className="py-2 pr-2 font-medium">
-                            {g.size_label}
-                          </td>
-                          <td className="py-2 px-2">{g.stack}</td>
-                          <td className="py-2 px-2">{g.reach}</td>
-                          <td className="py-2 px-2">{g.head_tube_angle}°</td>
-                          <td className="py-2 px-2">{g.seat_tube_angle}°</td>
-                        </tr>
-                      ))}
+                      {bike.geometries.map((g) => {
+                        const inCompare = isInComparison(bike.id, g.size_label);
+                        return (
+                          <tr key={g.size_label} className="text-gray-700">
+                            <td className="py-2 pr-2 font-medium">
+                              {g.size_label}
+                            </td>
+                            <td className="py-2 px-2">{g.stack}</td>
+                            <td className="py-2 px-2">{g.reach}</td>
+                            <td className="py-2 px-2">{g.head_tube_angle}°</td>
+                            <td className="py-2 px-2">{g.seat_tube_angle}°</td>
+                            <td className="py-2 pl-2 text-right">
+                              <button
+                                onClick={() =>
+                                  inCompare
+                                    ? removeFromCompare(bike.id, g.size_label)
+                                    : addToCompare(bike, g)
+                                }
+                                className={`text-[10px] px-2 py-1 rounded transition-colors ${
+                                  inCompare
+                                    ? "bg-red-100 text-red-600 hover:bg-red-200"
+                                    : "bg-blue-50 text-blue-600 hover:bg-blue-100"
+                                }`}
+                              >
+                                {inCompare
+                                  ? t.ui.remove_from_compare
+                                  : t.ui.add_to_compare}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
