@@ -24,6 +24,7 @@ export interface Bike {
   brake_type?: string;
   source_url?: string;
   max_tire_width?: string;
+  user_id?: string;
   geometries: Geometry[];
 }
 

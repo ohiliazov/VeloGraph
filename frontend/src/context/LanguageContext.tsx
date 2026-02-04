@@ -19,15 +19,19 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
   const [language, setLanguageState] = useState<Language>("en");
 
   useEffect(() => {
-    const savedLang = localStorage.getItem("language") as Language;
-    if (savedLang && (savedLang === "en" || savedLang === "uk")) {
-      setLanguageState(savedLang);
+    if (typeof window !== "undefined") {
+      const savedLang = localStorage.getItem("language") as Language;
+      if (savedLang && (savedLang === "en" || savedLang === "uk")) {
+        setLanguageState(savedLang);
+      }
     }
   }, []);
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
-    localStorage.setItem("language", lang);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("language", lang);
+    }
   };
 
   const t = translations[language];

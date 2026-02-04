@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import BikeFrameSVG from "./BikeFrameSVG";
 import { Bike, SearchResult } from "@/types";
@@ -20,7 +20,7 @@ export default function BikeSearch() {
   const [results, setResults] = useState<Bike[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const searchBikes = async () => {
+  const searchBikes = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -49,11 +49,11 @@ export default function BikeSearch() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [category, query, reachMax, reachMin, stackMax, stackMin]);
 
   useEffect(() => {
     searchBikes();
-  }, []);
+  }, [searchBikes]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,6 +80,12 @@ export default function BikeSearch() {
           >
             {t.ui.search_button}
           </button>
+          <Link
+            href="/bikes/new"
+            className="bg-orange-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-orange-700 transition-colors shadow-sm flex items-center gap-2"
+          >
+            {t.ui.create_bike}
+          </Link>
           {comparisonList.length > 0 && (
             <Link
               href="/compare"
@@ -205,12 +211,14 @@ export default function BikeSearch() {
                       {bike.model_year}
                     </span>
                   )}
-                  <Link
-                    href={`/bikes/${bike.id}/edit`}
-                    className="text-xs text-blue-600 hover:underline"
-                  >
-                    {t.ui.edit}
-                  </Link>
+                  {(!bike.source_url || bike.source_url.trim() === "") && (
+                    <Link
+                      href={`/bikes/${bike.id}/edit`}
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      {t.ui.edit}
+                    </Link>
+                  )}
                   {bike.source_url && (
                     <a
                       href={bike.source_url}

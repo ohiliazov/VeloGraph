@@ -29,6 +29,7 @@ class BikeSchema(BaseModel):
     brake_type: str | None = None
     source_url: str | None = None
     max_tire_width: str | None = None
+    user_id: str | None = None
     geometries: list[GeometrySchema]
 
     model_config = ConfigDict(from_attributes=True)
@@ -61,6 +62,7 @@ class BikeUpdateSchema(BaseModel):
     brake_type: str | None = None
     source_url: str | None = None
     max_tire_width: str | None = None
+    user_id: str | None = None
     geometries: list[GeometryUpdateSchema]
 
 

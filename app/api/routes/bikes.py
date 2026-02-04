@@ -121,6 +121,85 @@ def get_bike(bike_id: int, db: Annotated[Session, Depends(get_db)]):
     return bike
 
 
+@router.post("/", response_model=BikeSchema)
+async def create_bike(
+    bike_data: BikeUpdateSchema,
+    db: Annotated[Session, Depends(get_db)],
+    es: Annotated[AsyncElasticsearch, Depends(get_es_client)],
+):
+    # For custom bikes, source_url should be empty and user_id should be provided
+    new_bike = BikeMetaORM(
+        brand=bike_data.brand,
+        model_name=bike_data.model_name,
+        model_year=bike_data.model_year,
+        color=bike_data.color,
+        categories=bike_data.categories,
+        wheel_size=bike_data.wheel_size,
+        frame_material=bike_data.frame_material,
+        brake_type=bike_data.brake_type,
+        source_url=bike_data.source_url,
+        max_tire_width=bike_data.max_tire_width,
+        user_id=bike_data.user_id,
+    )
+    db.add(new_bike)
+    db.flush()  # To get new_bike.id
+
+    for geo_data in bike_data.geometries:
+        new_geo = BikeGeometryORM(
+            bike_meta_id=new_bike.id,
+            size_label=geo_data.size_label,
+            stack=geo_data.stack,
+            reach=geo_data.reach,
+            top_tube_effective_length=geo_data.top_tube_effective_length,
+            seat_tube_length=geo_data.seat_tube_length,
+            head_tube_length=geo_data.head_tube_length,
+            chainstay_length=geo_data.chainstay_length,
+            head_tube_angle=geo_data.head_tube_angle,
+            seat_tube_angle=geo_data.seat_tube_angle,
+            bb_drop=geo_data.bb_drop,
+            wheelbase=geo_data.wheelbase,
+        )
+        db.add(new_geo)
+
+    db.commit()
+    db.refresh(new_bike)
+
+    # Sync to Elasticsearch
+    await sync_bike_to_es(new_bike, es)
+
+    return new_bike
+
+
+async def sync_bike_to_es(bike: BikeMetaORM, es: AsyncElasticsearch):
+    es_doc = {
+        "id": bike.id,
+        "brand": bike.brand,
+        "model_name": bike.model_name,
+        "model_year": bike.model_year,
+        "color": bike.color,
+        "frame_material": bike.frame_material,
+        "source_url": bike.source_url,
+        "max_tire_width": bike.max_tire_width,
+        "user_id": bike.user_id,
+        "simple_type": get_simple_types(bike.categories),
+        "category_original": " / ".join(bike.categories),
+        "geometries": [
+            {
+                "size_label": geo.size_label,
+                "stack": geo.stack,
+                "reach": geo.reach,
+                "top_tube_effective_length": geo.top_tube_effective_length,
+                "seat_tube_length": geo.seat_tube_length,
+                "head_tube_angle": geo.head_tube_angle,
+                "seat_tube_angle": geo.seat_tube_angle,
+                "wheelbase": geo.wheelbase,
+            }
+            for geo in bike.geometries
+        ],
+    }
+    await es.index(index="bikes", id=str(bike.id), document=es_doc, refresh=True)
+
+
 @router.put("/{bike_id}", response_model=BikeSchema)
 async def update_bike(
     bike_id: int,
@@ -133,6 +212,11 @@ async def update_bike(
     if not bike:
         raise HTTPException(status_code=404, detail="Bike not found")
 
+    # Only custom bikes can be edited.
+    # Custom bikes have source_url empty (None or empty string).
+    if bike.source_url and bike.source_url.strip():
+        raise HTTPException(status_code=403, detail="Only custom bikes can be edited")
+
     bike.brand = bike_update.brand
     bike.model_name = bike_update.model_name
     bike.model_year = bike_update.model_year
@@ -143,6 +227,7 @@ async def update_bike(
     bike.brake_type = bike_update.brake_type
     bike.source_url = bike_update.source_url
     bike.max_tire_width = bike_update.max_tire_width
+    bike.user_id = bike_update.user_id
 
     # Simple approach for geometries: replace them all
     # Delete existing geometries
@@ -169,31 +254,30 @@ async def update_bike(
     db.refresh(bike)
 
     # Sync to Elasticsearch
-    es_doc = {
-        "id": bike.id,
-        "brand": bike.brand,
-        "model_name": bike.model_name,
-        "model_year": bike.model_year,
-        "color": bike.color,
-        "frame_material": bike.frame_material,
-        "source_url": bike.source_url,
-        "max_tire_width": bike.max_tire_width,
-        "simple_type": get_simple_types(bike.categories),
-        "category_original": " / ".join(bike.categories),
-        "geometries": [
-            {
-                "size_label": geo.size_label,
-                "stack": geo.stack,
-                "reach": geo.reach,
-                "top_tube_effective_length": geo.top_tube_effective_length,
-                "seat_tube_length": geo.seat_tube_length,
-                "head_tube_angle": geo.head_tube_angle,
-                "seat_tube_angle": geo.seat_tube_angle,
-                "wheelbase": geo.wheelbase,
-            }
-            for geo in bike.geometries
-        ],
-    }
-    await es.index(index="bikes", id=str(bike.id), document=es_doc, refresh=True)
+    await sync_bike_to_es(bike, es)
 
     return bike
+
+
+@router.delete("/{bike_id}")
+async def delete_bike(
+    bike_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    es: Annotated[AsyncElasticsearch, Depends(get_es_client)],
+):
+    stmt = select(BikeMetaORM).where(BikeMetaORM.id == bike_id)
+    bike = db.scalar(stmt)
+    if not bike:
+        raise HTTPException(status_code=404, detail="Bike not found")
+
+    # Only custom bikes can be removed.
+    if bike.source_url and bike.source_url.strip():
+        raise HTTPException(status_code=403, detail="Only custom bikes can be removed")
+
+    db.delete(bike)
+    db.commit()
+
+    # Remove from Elasticsearch
+    await es.delete(index="bikes", id=str(bike_id), ignore=[404], refresh=True)
+
+    return {"detail": "Bike deleted"}

@@ -24,21 +24,27 @@ export const ComparisonProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [comparisonList, setComparisonList] = useState<ComparisonItem[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem("comparisonList");
-    if (saved) {
-      try {
-        setComparisonList(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to parse comparison list", e);
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("comparisonList");
+      if (saved) {
+        try {
+          setComparisonList(JSON.parse(saved));
+        } catch (e) {
+          console.error("Failed to parse comparison list", e);
+        }
       }
+      setIsInitialized(true);
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("comparisonList", JSON.stringify(comparisonList));
-  }, [comparisonList]);
+    if (isInitialized && typeof window !== "undefined") {
+      localStorage.setItem("comparisonList", JSON.stringify(comparisonList));
+    }
+  }, [comparisonList, isInitialized]);
 
   const addToCompare = (bike: Bike, geometry: Geometry) => {
     setComparisonList((prev) => {

@@ -11,11 +11,13 @@ import LanguageSwitcher from "../../../components/LanguageSwitcher";
 
 export default function BikeDetailPage() {
   const { id } = useParams();
+  const router = useRouter();
   const { t } = useLanguage();
   const { addToCompare, removeFromCompare, isInComparison, comparisonList } =
     useComparison();
   const [bike, setBike] = useState<Bike | null>(null);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -34,6 +36,21 @@ export default function BikeDetailPage() {
     fetchBike();
   }, [id]);
 
+  const handleDelete = async () => {
+    if (!confirm(t.ui.delete_bike + "?")) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`http://localhost:8000/api/bikes/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete bike");
+      router.push("/");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred");
+      setDeleting(false);
+    }
+  };
+
   if (loading) return <div className="text-center py-20">{t.ui.loading}</div>;
   if (error)
     return <div className="text-center py-20 text-red-500">{error}</div>;
@@ -41,6 +58,8 @@ export default function BikeDetailPage() {
     return (
       <div className="text-center py-20">{t.categories.bike_not_found}</div>
     );
+
+  const isCustom = !bike.source_url || bike.source_url.trim() === "";
 
   return (
     <div className="min-h-screen bg-gray-50 py-12">
@@ -59,12 +78,23 @@ export default function BikeDetailPage() {
                 {t.ui.compare} ({comparisonList.length})
               </Link>
             )}
-            <Link
-              href={`/bikes/${id}/edit`}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm"
-            >
-              {t.ui.edit_bike}
-            </Link>
+            {isCustom && (
+              <>
+                <Link
+                  href={`/bikes/${id}/edit`}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm"
+                >
+                  {t.ui.edit_bike}
+                </Link>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors shadow-sm disabled:bg-red-400"
+                >
+                  {deleting ? t.ui.deleting : t.ui.delete_bike}
+                </button>
+              </>
+            )}
             {bike.source_url && (
               <a
                 href={bike.source_url}

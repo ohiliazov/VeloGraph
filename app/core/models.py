@@ -16,6 +16,7 @@ class BikeMeta(BaseModel):
     brake_type: str | None = None
     source_url: str | None = None
     max_tire_width: str | None = None
+    user_id: str | None = None
 
 
 class BikeGeometry(BaseModel):
@@ -110,6 +111,7 @@ class BikeMetaORM(Base):
     brake_type: Mapped[str | None]
     source_url: Mapped[str | None]
     max_tire_width: Mapped[str | None]
+    user_id: Mapped[str | None] = mapped_column(String, index=True)
 
     geometries: Mapped[list[BikeGeometryORM]] = relationship(back_populates="bike_meta", cascade="all, delete-orphan")
 
