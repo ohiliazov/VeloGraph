@@ -1,3 +1,5 @@
+"use client";
+
 import BikeSearch from "../components/BikeSearch";
 import LanguageSwitcher from "../components/LanguageSwitcher";
 import { useLanguage } from "../context/LanguageContext";
