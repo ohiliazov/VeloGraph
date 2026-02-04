@@ -188,6 +188,11 @@ export default function BikeSearch() {
                           t.categories[c as keyof typeof t.categories] || c,
                       )
                       .join(" / ")}
+                    {bike.wheel_size && (
+                      <span className="ml-2 text-xs text-gray-400">
+                        • {t.wheel_sizes[bike.wheel_size] || bike.wheel_size}
+                      </span>
+                    )}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-2">

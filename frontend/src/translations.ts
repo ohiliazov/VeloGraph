@@ -64,6 +64,16 @@ export const translations = {
       no_bikes_to_compare: "No bikes selected for comparison.",
       clear_comparison: "Clear All",
     },
+    wheel_sizes: {
+      "700": '700C / 28" / 29"',
+      "584": '27.5"',
+      "559": '26"',
+      "507": '24"',
+      "406": '20"',
+      "305": '16"',
+      "254": '14"',
+      "203": '12"',
+    } as Record<string, string>,
   },
   uk: {
     categories: {
@@ -130,6 +140,16 @@ export const translations = {
       no_bikes_to_compare: "Велосипеди для порівняння не вибрані.",
       clear_comparison: "Очистити все",
     },
+    wheel_sizes: {
+      "700": '700C / 28" / 29"',
+      "584": '27.5"',
+      "559": '26"',
+      "507": '24"',
+      "406": '20"',
+      "305": '16"',
+      "254": '14"',
+      "203": '12"',
+    } as Record<string, string>,
   },
 };
 

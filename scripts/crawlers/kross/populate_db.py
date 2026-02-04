@@ -58,6 +58,7 @@ if __name__ == "__main__":
             model_name = meta.get("model", "").strip()
             categories = meta.get("categories", [])
             model_year = meta.get("model_year")
+            wheel_size = meta.get("wheel_size")
 
             if not model_name:
                 logger.warning("⚠️ Skipping file {}: missing model name in meta", item.name)
@@ -77,6 +78,7 @@ if __name__ == "__main__":
                     model_name=model_name,
                     categories=categories,
                     model_year=model_year,
+                    wheel_size=str(wheel_size) if wheel_size else None,
                 )
                 session.add(bike_meta)
                 session.flush()  # to get bike_meta.id
@@ -87,6 +89,8 @@ if __name__ == "__main__":
                 bike_meta.categories = categories  # Update categories
                 if model_year:
                     bike_meta.model_year = model_year
+                if wheel_size:
+                    bike_meta.wheel_size = str(wheel_size)
                 logger.debug("♻️ Updating BikeMeta: {} {} ({})", brand, model_name, categories)
 
             # Replace all existing geometries for this bike to keep data in sync

@@ -120,7 +120,9 @@ export default function BikeDetailPage() {
               {t.ui.wheel_size}
             </h3>
             <p className="text-lg font-medium text-gray-900">
-              {bike.wheel_size || "N/A"}
+              {bike.wheel_size
+                ? t.wheel_sizes[bike.wheel_size] || bike.wheel_size
+                : "N/A"}
             </p>
           </div>
           <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">

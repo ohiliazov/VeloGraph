@@ -155,7 +155,10 @@ export default function ComparisonPage() {
                   </td>
                   {comparisonList.map((item, idx) => (
                     <td key={idx} className="py-3 px-6 border-r text-xs">
-                      {item.bike.wheel_size || "-"}
+                      {item.bike.wheel_size
+                        ? t.wheel_sizes[item.bike.wheel_size] ||
+                          item.bike.wheel_size
+                        : "-"}
                     </td>
                   ))}
                 </tr>
