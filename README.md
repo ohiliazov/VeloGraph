@@ -85,10 +85,19 @@ docker-compose up -d
 
 ### 4. Встановлення залежностей та запуск API
 ```bash
-poetry install
-poetry run uvicorn app.main:app --reload
+cd backend
+uv sync
+uv run uvicorn backend.__main__:app --reload
 ```
 API буде доступне за адресою: `http://localhost:8000/docs`
+
+### 5. Керування базою даних (Alembic)
+Для застосування міграцій бази даних:
+```bash
+cd backend
+export PYTHONPATH=$PYTHONPATH:.
+alembic upgrade head
+```
 
 ### 5. (Опціонально) Завантаження бази знань
 Щоб система "поумнішала", потрібно завантажити мануали:

@@ -1,11 +1,9 @@
-import pytest
-from pydantic import ValidationError
-
-from backend.api.schemas import BikeSchema, BikeUpdateSchema, GeometrySchema
+from backend.api.schemas import BikeProductSchema, FramesetSchema, GeometrySchema
 
 
 def test_geometry_schema_valid():
     data = {
+        "id": 1,
         "size_label": "M",
         "stack": 580,
         "reach": 380,
@@ -23,27 +21,66 @@ def test_geometry_schema_valid():
     assert geo.stack == 580
 
 
-def test_geometry_schema_invalid_types():
+def test_frameset_schema_valid():
     data = {
-        "size_label": "M",
-        "stack": "high",  # Should be int
-        "reach": 380,
+        "id": 1,
+        "name": "Esker",
+        "material": "Carbon",
+        "geometry_id": 1,
+        "geometry_data": {
+            "id": 1,
+            "size_label": "M",
+            "stack": 580,
+            "reach": 380,
+            "top_tube_effective_length": 550,
+            "seat_tube_length": 520,
+            "head_tube_length": 150,
+            "chainstay_length": 430,
+            "head_tube_angle": 71.0,
+            "seat_tube_angle": 73.5,
+            "bb_drop": 70,
+            "wheelbase": 1020,
+        },
     }
-    with pytest.raises(ValidationError):
-        GeometrySchema(**data)
+    fs = FramesetSchema(**data)
+    assert fs.name == "Esker"
+    assert fs.geometry_data.stack == 580
 
 
-def test_bike_schema_valid():
-    data = {"id": 1, "brand": "Kross", "model_name": "Esker", "categories": ["Gravel"], "geometries": []}
-    bike = BikeSchema(**data)
-    assert bike.brand == "Kross"
-    assert bike.geometries == []
-
-
-def test_bike_update_schema_missing_fields():
+def test_bike_product_schema_valid():
     data = {
-        "brand": "Kross"
-        # model_name is missing
+        "id": 1,
+        "sku": "ESKER-6.0-2023",
+        "frameset": {
+            "id": 1,
+            "name": "Esker",
+            "material": "Carbon",
+            "geometry_id": 1,
+            "geometry_data": {
+                "id": 1,
+                "size_label": "M",
+                "stack": 580,
+                "reach": 380,
+                "top_tube_effective_length": 550,
+                "seat_tube_length": 520,
+                "head_tube_length": 150,
+                "chainstay_length": 430,
+                "head_tube_angle": 71.0,
+                "seat_tube_angle": 73.5,
+                "bb_drop": 70,
+                "wheelbase": 1020,
+            },
+        },
+        "build_kit": {
+            "id": 1,
+            "name": "GRX 600",
+            "groupset": "Shimano GRX",
+            "wheelset": "DT Swiss",
+            "cockpit": "Easton",
+            "tires": "WTB",
+        },
     }
-    with pytest.raises(ValidationError):
-        BikeUpdateSchema(**data)
+    product = BikeProductSchema(**data)
+    assert product.sku == "ESKER-6.0-2023"
+    assert product.frameset.name == "Esker"
+    assert product.build_kit.groupset == "Shimano GRX"

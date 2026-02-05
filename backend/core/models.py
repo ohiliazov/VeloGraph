@@ -1,25 +1,9 @@
 from pydantic import BaseModel, Field, PositiveInt
-from sqlalchemy import ARRAY, ForeignKey, String
+from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
-class BikeMeta(BaseModel):
-    model_config = {"populate_by_name": True, "from_attributes": True}
-
-    brand: str
-    categories: list[str]
-    model_name: str
-    model_year: int | None = None
-    color: str | None = None
-    wheel_size: str | None = None
-    frame_material: str | None = None
-    brake_type: str | None = None
-    source_url: str | None = None
-    max_tire_width: str | None = None
-    user_id: str | None = None
-
-
-class BikeGeometry(BaseModel):
+class GeometryData(BaseModel):
     """
     Comprehensive Pydantic model for bicycle frameset geometry.
     Measurements are in millimeters (mm) and angles in degrees (°).
@@ -93,34 +77,40 @@ class BikeGeometry(BaseModel):
     )
 
 
+class Frameset(BaseModel):
+    model_config = {"populate_by_name": True, "from_attributes": True}
+
+    name: str
+    material: str | None = None
+    geometry_id: int
+
+
+class BuildKit(BaseModel):
+    model_config = {"populate_by_name": True, "from_attributes": True}
+
+    name: str
+    groupset: str | None = None
+    wheelset: str | None = None
+    cockpit: str | None = None
+    tires: str | None = None
+
+
+class BikeProduct(BaseModel):
+    model_config = {"populate_by_name": True, "from_attributes": True}
+
+    sku: str
+    frameset_id: int
+    build_kit_id: int
+
+
 class Base(DeclarativeBase):
     pass
 
 
-class BikeMetaORM(Base):
-    __tablename__ = "bike_meta"
+class GeometryDataORM(Base):
+    __tablename__ = "geometry_data"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    brand: Mapped[str]
-    categories: Mapped[list[str]] = mapped_column(ARRAY(String))
-    model_name: Mapped[str]
-    model_year: Mapped[int | None]
-    color: Mapped[str | None]
-    wheel_size: Mapped[str | None]
-    frame_material: Mapped[str | None]
-    brake_type: Mapped[str | None]
-    source_url: Mapped[str | None]
-    max_tire_width: Mapped[str | None]
-    user_id: Mapped[str | None] = mapped_column(String, index=True)
-
-    geometries: Mapped[list[BikeGeometryORM]] = relationship(back_populates="bike_meta", cascade="all, delete-orphan")
-
-
-class BikeGeometryORM(Base):
-    __tablename__ = "bike_geometry"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    bike_meta_id: Mapped[int] = mapped_column(ForeignKey("bike_meta.id", ondelete="CASCADE"), nullable=False)
     size_label: Mapped[str] = mapped_column(nullable=False)
 
     stack: Mapped[int] = mapped_column(nullable=False)
@@ -134,4 +124,41 @@ class BikeGeometryORM(Base):
     bb_drop: Mapped[int] = mapped_column(nullable=False)
     wheelbase: Mapped[int] = mapped_column(nullable=False)
 
-    bike_meta: Mapped[BikeMetaORM] = relationship(back_populates="geometries")
+    framesets: Mapped[list[FramesetORM]] = relationship(back_populates="geometry_data")
+
+
+class FramesetORM(Base):
+    __tablename__ = "framesets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(nullable=False)
+    material: Mapped[str | None]
+    geometry_id: Mapped[int] = mapped_column(ForeignKey("geometry_data.id"), nullable=False)
+
+    geometry_data: Mapped[GeometryDataORM] = relationship(back_populates="framesets")
+    bike_products: Mapped[list[BikeProductORM]] = relationship(back_populates="frameset")
+
+
+class BuildKitORM(Base):
+    __tablename__ = "build_kits"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(nullable=False)
+    groupset: Mapped[str | None]
+    wheelset: Mapped[str | None]
+    cockpit: Mapped[str | None]
+    tires: Mapped[str | None]
+
+    bike_products: Mapped[list[BikeProductORM]] = relationship(back_populates="build_kit")
+
+
+class BikeProductORM(Base):
+    __tablename__ = "bike_products"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    sku: Mapped[str] = mapped_column(unique=True, nullable=False)
+    frameset_id: Mapped[int] = mapped_column(ForeignKey("framesets.id"), nullable=False)
+    build_kit_id: Mapped[int] = mapped_column(ForeignKey("build_kits.id"), nullable=False)
+
+    frameset: Mapped[FramesetORM] = relationship(back_populates="bike_products")
+    build_kit: Mapped[BuildKitORM] = relationship(back_populates="bike_products")

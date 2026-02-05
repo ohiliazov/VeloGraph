@@ -1,5 +1,7 @@
+import argparse
+
 from loguru import logger
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, exc
 from sqlalchemy.orm import sessionmaker
 
 from backend.config import pg_settings
@@ -9,14 +11,29 @@ engine = create_engine(pg_settings.connection_string)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-def init_db():
-    Base.metadata.create_all(engine)
-    logger.success(
-        "✅ Database schema created for '{}' on {}:{}",
-        pg_settings.db,
-        pg_settings.host,
-        pg_settings.port,
-    )
+def init_db(drop_all: bool = False):
+    """
+    Initializes the database schema.
+    Note: It is recommended to use Alembic for migrations instead of this function
+    in production.
+    :param drop_all: If True, drops all existing tables before creating new ones.
+    """
+    try:
+        if drop_all:
+            logger.warning("Re-initializing database: dropping all tables...")
+            Base.metadata.drop_all(engine)
+            logger.success("✅ All tables dropped.")
+
+        Base.metadata.create_all(engine)
+        logger.success(
+            "✅ Database schema initialized for '{}' on {}:{}",
+            pg_settings.db,
+            pg_settings.host,
+            pg_settings.port,
+        )
+    except exc.SQLAlchemyError as e:
+        logger.error("❌ Failed to initialize database: {}", e)
+        raise
 
 
 def get_db():
@@ -28,4 +45,12 @@ def get_db():
 
 
 if __name__ == "__main__":
-    init_db()
+    parser = argparse.ArgumentParser(description="Initialize the database.")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Drop all tables and re-initialize the database.",
+    )
+    args = parser.parse_args()
+
+    init_db(drop_all=args.force)

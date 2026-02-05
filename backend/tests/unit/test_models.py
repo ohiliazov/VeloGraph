@@ -1,10 +1,10 @@
 import pytest
 from pydantic import ValidationError
 
-from backend.core.models import BikeGeometry
+from backend.core.models import GeometryData
 
 
-def test_bike_geometry_valid():
+def test_geometry_data_valid():
     data = {
         "stack": 600,
         "reach": 400,
@@ -17,11 +17,11 @@ def test_bike_geometry_valid():
         "bb_drop": 70,
         "wheelbase": 1020,
     }
-    geo = BikeGeometry(**data)
+    geo = GeometryData(**data)
     assert geo.stack == 600
 
 
-def test_bike_geometry_invalid_angles():
+def test_geometry_data_invalid_angles():
     data = {
         "stack": 600,
         "reach": 400,
@@ -35,10 +35,10 @@ def test_bike_geometry_invalid_angles():
         "wheelbase": 1020,
     }
     with pytest.raises(ValidationError):
-        BikeGeometry(**data)
+        GeometryData(**data)
 
 
-def test_bike_geometry_negative_values():
+def test_geometry_data_negative_values():
     data = {
         "stack": -100,  # Must be positive
         "reach": 400,
@@ -52,4 +52,4 @@ def test_bike_geometry_negative_values():
         "wheelbase": 1020,
     }
     with pytest.raises(ValidationError):
-        BikeGeometry(**data)
+        GeometryData(**data)

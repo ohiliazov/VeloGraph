@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from backend.core.db import SessionLocal
-from backend.core.models import BikeGeometryORM, BikeMetaORM
+from backend.core.models import FramesetORM, GeometryDataORM
 from backend.scripts.constants import artifacts_dir
 
 # --- Geometry rendering helpers ---
@@ -30,7 +30,7 @@ def sanitize_filename(value: str) -> str:
     return s or "unnamed"
 
 
-def compute_points(geom: BikeGeometryORM) -> dict[str, tuple[float, float]]:
+def compute_points(geom: GeometryDataORM) -> dict[str, tuple[float, float]]:
     # Inputs from DB are already in mm/degrees according to ORM
     stack_mm = geom.stack
     reach_mm = geom.reach
@@ -100,7 +100,7 @@ def compute_canvas(points: dict[str, tuple[float, float]]) -> tuple[int, int, fl
     return svg_w, svg_h, tx, ty
 
 
-def render_svg(meta: BikeMetaORM, geom: BikeGeometryORM, out_path: Path) -> None:
+def render_svg(frameset: FramesetORM, geom: GeometryDataORM, out_path: Path) -> None:
     points = compute_points(geom)
     svg_w, svg_h, tx, ty = compute_canvas(points)
 
@@ -155,26 +155,25 @@ def main() -> None:
 
     count = 0
     with SessionLocal() as session:
-        stmt = select(BikeMetaORM).options(selectinload(BikeMetaORM.geometries))
-        bikes = session.scalars(stmt).all()
+        stmt = select(FramesetORM).options(selectinload(FramesetORM.geometry_data))
+        framesets = session.scalars(stmt).all()
 
-        if not bikes:
-            logger.warning("No bikes found in database; nothing to render.")
+        if not framesets:
+            logger.warning("No framesets found in database; nothing to render.")
             return
 
-        for bike in bikes:
-            for geom in bike.geometries:
-                brand = bike.brand or "unknown"
-                model = bike.model_name or "model"
-                size = geom.size_label or "size"
-                fname = f"{sanitize_filename(brand)}_{sanitize_filename(model)}_{sanitize_filename(size)}.svg"
-                out_path = output_dir / fname
-                try:
-                    render_svg(bike, geom, out_path)
-                    count += 1
-                    logger.debug("Rendered {} → {}", f"{brand} {model} [{size}]", out_path)
-                except Exception:
-                    logger.exception("Failed to render {} {} {}", brand, model, size)
+        for frameset in framesets:
+            geom = frameset.geometry_data
+            name = frameset.name or "unknown"
+            size = geom.size_label or "size"
+            fname = f"{sanitize_filename(name)}_{sanitize_filename(size)}.svg"
+            out_path = output_dir / fname
+            try:
+                render_svg(frameset, geom, out_path)
+                count += 1
+                logger.debug("Rendered {} → {}", f"{name} [{size}]", out_path)
+            except Exception:
+                logger.exception("Failed to render {} {}", name, size)
 
     logger.success("Generated {} SVG files in {}", count, output_dir)
 
