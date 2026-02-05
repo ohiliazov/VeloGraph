@@ -1,9 +1,11 @@
-from backend.api.schemas import BikeProductSchema, FramesetSchema, GeometrySchema
+from backend.api.schemas import BikeProductSchema, FramesetSchema
 
 
-def test_geometry_schema_valid():
+def test_frameset_schema_valid():
     data = {
         "id": 1,
+        "name": "Esker",
+        "material": "Carbon",
         "size_label": "M",
         "stack": 580,
         "reach": 380,
@@ -16,19 +18,19 @@ def test_geometry_schema_valid():
         "bb_drop": 70,
         "wheelbase": 1020,
     }
-    geo = GeometrySchema(**data)
-    assert geo.size_label == "M"
-    assert geo.stack == 580
+    fs = FramesetSchema(**data)
+    assert fs.name == "Esker"
+    assert fs.stack == 580
 
 
-def test_frameset_schema_valid():
+def test_bike_product_schema_valid():
     data = {
         "id": 1,
-        "name": "Esker",
-        "material": "Carbon",
-        "geometry_id": 1,
-        "geometry_data": {
+        "sku": "ESKER-6.0-2023",
+        "frameset": {
             "id": 1,
+            "name": "Esker",
+            "material": "Carbon",
             "size_label": "M",
             "stack": 580,
             "reach": 380,
@@ -40,36 +42,6 @@ def test_frameset_schema_valid():
             "seat_tube_angle": 73.5,
             "bb_drop": 70,
             "wheelbase": 1020,
-        },
-    }
-    fs = FramesetSchema(**data)
-    assert fs.name == "Esker"
-    assert fs.geometry_data.stack == 580
-
-
-def test_bike_product_schema_valid():
-    data = {
-        "id": 1,
-        "sku": "ESKER-6.0-2023",
-        "frameset": {
-            "id": 1,
-            "name": "Esker",
-            "material": "Carbon",
-            "geometry_id": 1,
-            "geometry_data": {
-                "id": 1,
-                "size_label": "M",
-                "stack": 580,
-                "reach": 380,
-                "top_tube_effective_length": 550,
-                "seat_tube_length": 520,
-                "head_tube_length": 150,
-                "chainstay_length": 430,
-                "head_tube_angle": 71.0,
-                "seat_tube_angle": 73.5,
-                "bb_drop": 70,
-                "wheelbase": 1020,
-            },
         },
         "build_kit": {
             "id": 1,

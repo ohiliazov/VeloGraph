@@ -1,3 +1,4 @@
+import sqlalchemy as sa
 from pydantic import BaseModel, Field, PositiveInt
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -82,7 +83,17 @@ class Frameset(BaseModel):
 
     name: str
     material: str | None = None
-    geometry_id: int
+    size_label: str
+    stack: PositiveInt
+    reach: PositiveInt
+    top_tube_effective_length: PositiveInt = Field(alias="TT")
+    seat_tube_length: PositiveInt = Field(alias="ST")
+    head_tube_length: PositiveInt = Field(alias="HT")
+    chainstay_length: PositiveInt = Field(alias="CS")
+    head_tube_angle: float = Field(ge=60.0, le=75.0, alias="HA")
+    seat_tube_angle: float = Field(ge=70.0, le=80.0, alias="SA")
+    bb_drop: PositiveInt
+    wheelbase: PositiveInt = Field(alias="WB")
 
 
 class BuildKit(BaseModel):
@@ -107,10 +118,12 @@ class Base(DeclarativeBase):
     pass
 
 
-class GeometryDataORM(Base):
-    __tablename__ = "geometry_data"
+class FramesetORM(Base):
+    __tablename__ = "framesets"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(nullable=False)
+    material: Mapped[str | None]
     size_label: Mapped[str] = mapped_column(nullable=False)
 
     stack: Mapped[int] = mapped_column(nullable=False)
@@ -124,18 +137,6 @@ class GeometryDataORM(Base):
     bb_drop: Mapped[int] = mapped_column(nullable=False)
     wheelbase: Mapped[int] = mapped_column(nullable=False)
 
-    framesets: Mapped[list[FramesetORM]] = relationship(back_populates="geometry_data")
-
-
-class FramesetORM(Base):
-    __tablename__ = "framesets"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(nullable=False)
-    material: Mapped[str | None]
-    geometry_id: Mapped[int] = mapped_column(ForeignKey("geometry_data.id"), nullable=False)
-
-    geometry_data: Mapped[GeometryDataORM] = relationship(back_populates="framesets")
     bike_products: Mapped[list[BikeProductORM]] = relationship(back_populates="frameset")
 
 
@@ -157,6 +158,7 @@ class BikeProductORM(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     sku: Mapped[str] = mapped_column(unique=True, nullable=False)
+    colors: Mapped[list[str]] = mapped_column(sa.JSON, nullable=False, server_default="[]")
     frameset_id: Mapped[int] = mapped_column(ForeignKey("framesets.id"), nullable=False)
     build_kit_id: Mapped[int] = mapped_column(ForeignKey("build_kits.id"), nullable=False)
 

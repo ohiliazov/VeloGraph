@@ -14,6 +14,12 @@ from backend.utils.helpers import extract_number
 # --- Models ---
 
 
+class KrossColorVariant(BaseModel):
+    html_path: str
+    color: str
+    url: str
+
+
 class KrossBikeMeta(BaseModel):
     brand: str = "Kross"
     model: str
@@ -22,8 +28,8 @@ class KrossBikeMeta(BaseModel):
     wheel_size: str | None = None
     max_tire_width: float | str | None = None
     material: str | None = None
-    color: str | None = None
     source_url: str = ""
+    colors: list[KrossColorVariant] = Field(default_factory=list)
 
 
 class ExtractedBikeData(BaseModel):
@@ -133,15 +139,6 @@ def _extract_meta(soup: BeautifulSoup) -> KrossBikeMeta:
     if url_tag and isinstance(url_tag, Tag):
         meta_data["source_url"] = url_tag.get("content", "").strip()
 
-    # Heuristic for color from URL
-    if meta_data["source_url"] and meta_data["model"]:
-        url_path = meta_data["source_url"].split("/")[-1]
-        model_slug = meta_data["model"].lower().replace(" ", "-").replace(".", "-")
-        if model_slug in url_path:
-            color_part = url_path.split(model_slug)[-1].strip("-")
-            if color_part:
-                meta_data["color"] = color_part.replace("-", " ")
-
     # Breadcrumbs & Year
     breadcrumbs = soup.find("div", class_="product-breadcrumbs")
     if breadcrumbs:
@@ -152,6 +149,23 @@ def _extract_meta(soup: BeautifulSoup) -> KrossBikeMeta:
                 meta_data["model_year"] = int(c)
             elif c:
                 meta_data["categories"].append(c)
+
+    # Colors from product-item-colors
+    related_colors_div = soup.find("div", class_="product-related-colors")
+    if related_colors_div:
+        color_variants = []
+        for color_div in related_colors_div.find_all("div", class_="product-item-colors"):
+            a_tag = color_div.find("a", class_="variant-item")
+            if a_tag and isinstance(a_tag, Tag):
+                v_url = a_tag.get("href", "").strip()
+                v_color = a_tag.get("title", "").strip()
+                # Use URL to get path
+                v_url_path = v_url.split("?")[0].rstrip("/")
+                v_html_name = v_url_path.split("/")[-1] + ".html"
+
+                color_variants.append(KrossColorVariant(html_path=v_html_name, color=v_color, url=v_url))
+        if color_variants:
+            meta_data["colors"] = color_variants
 
     return KrossBikeMeta(**meta_data)
 
@@ -318,54 +332,59 @@ def extract_bike_data(html: str) -> ExtractedBikeData | None:
     )
 
 
-def process_file(html_path: Path, json_dir: Path, force: bool = False) -> bool:
-    """
-    Processes a single HTML file and saves it as JSON.
-    Returns True if processed, False if skipped.
-    """
-    try:
-        content = html_path.read_text(encoding="utf-8")
-        data = extract_bike_data(content)
-
-        if data:
-            json_path = json_dir / html_path.with_suffix(".json").name
-            if json_path.exists() and not force:
-                logger.debug(f"⚠️  Skipping {html_path.name}: JSON already exists")
-                return False
-
-            json_path.write_text(
-                data.model_dump_json(indent=2),
-                encoding="utf-8",
-            )
-            logger.debug(f"✅ Saved JSON: {json_path.name}")
-            return True
-        else:
-            logger.warning(f"⚠️  Skipped {html_path.name}: No geometry table found")
-            return False
-    except Exception:
-        logger.exception(f"🚨 Critical error processing {html_path.name}")
-        return False
-
-
 def process_directory(html_dir: Path, json_dir: Path, force: bool = False):
     """
     Processes all HTML files in a directory.
+    Groups color variants.
     """
     json_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"📂 Scanning directory: {html_dir}...")
 
+    html_files = list(html_dir.glob("*.html"))
+    processed_htmls = set()
     files_processed = 0
-    total_files = 0
     skipped_count = 0
 
-    for html_path in html_dir.glob("*.html"):
-        total_files += 1
-        if process_file(html_path, json_dir, force):
-            files_processed += 1
-        else:
-            skipped_count += 1
+    # Sort files to be deterministic
+    for html_path in sorted(html_files):
+        if html_path.name in processed_htmls:
+            continue
 
-    logger.success(f"🏁 Done. Total: {total_files} | Processed: {files_processed} | Skipped: {skipped_count}")
+        try:
+            content = html_path.read_text(encoding="utf-8")
+            data = extract_bike_data(content)
+
+            if data:
+                # The extract_bike_data now populates meta.colors from product-related-colors
+                # We should ensure all those variants are marked as processed
+                for v in data.meta.colors:
+                    processed_htmls.add(v.html_path)
+
+                # Also mark current file as processed
+                processed_htmls.add(html_path.name)
+
+                json_path = json_dir / html_path.with_suffix(".json").name
+                if json_path.exists() and not force:
+                    logger.debug(f"⚠️  Skipping {html_path.name}: JSON already exists")
+                    skipped_count += 1
+                    continue
+
+                json_path.write_text(
+                    data.model_dump_json(indent=2),
+                    encoding="utf-8",
+                )
+                logger.debug(f"✅ Saved JSON: {json_path.name}")
+                files_processed += 1
+            else:
+                logger.warning(f"⚠️  Skipped {html_path.name}: No geometry table found")
+                skipped_count += 1
+                processed_htmls.add(html_path.name)
+        except Exception:
+            logger.exception(f"🚨 Critical error processing {html_path.name}")
+            skipped_count += 1
+            processed_htmls.add(html_path.name)
+
+    logger.success(f"🏁 Done. Processed: {files_processed} | Skipped: {skipped_count}")
 
 
 def main():

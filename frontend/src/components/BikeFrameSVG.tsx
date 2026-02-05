@@ -1,10 +1,10 @@
 "use client";
 
 import React from "react";
-import { Geometry } from "@/types";
+import { Frameset } from "@/types";
 
 interface BikeFrameSVGProps {
-  geometry: Geometry;
+  geometry: Frameset;
   wheelSize?: string;
   maxTireWidth?: string;
   className?: string;

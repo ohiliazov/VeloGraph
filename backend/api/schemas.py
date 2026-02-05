@@ -1,8 +1,10 @@
 from pydantic import BaseModel, ConfigDict
 
 
-class GeometrySchema(BaseModel):
+class FramesetSchema(BaseModel):
     id: int
+    name: str
+    material: str | None = None
     size_label: str
     stack: int
     reach: int
@@ -14,16 +16,6 @@ class GeometrySchema(BaseModel):
     seat_tube_angle: float
     bb_drop: int
     wheelbase: int
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class FramesetSchema(BaseModel):
-    id: int
-    name: str
-    material: str | None = None
-    geometry_id: int
-    geometry_data: GeometrySchema
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -42,19 +34,34 @@ class BuildKitSchema(BaseModel):
 class BikeProductSchema(BaseModel):
     id: int
     sku: str
+    colors: list[str] = []
     frameset: FramesetSchema
     build_kit: BuildKitSchema
 
     model_config = ConfigDict(from_attributes=True)
 
 
+class BikeGroupSchema(BaseModel):
+    """A group of bike products (different sizes of the same model/build kit)."""
+
+    frameset_name: str
+    material: str | None = None
+    build_kit: BuildKitSchema
+    products: list[BikeProductSchema]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class BikeProductCreateSchema(BaseModel):
     sku: str
+    colors: list[str] = []
     frameset_id: int
     build_kit_id: int
 
 
-class GeometryCreateSchema(BaseModel):
+class FramesetCreateSchema(BaseModel):
+    name: str
+    material: str | None = None
     size_label: str
     stack: int
     reach: int
@@ -68,12 +75,6 @@ class GeometryCreateSchema(BaseModel):
     wheelbase: int
 
 
-class FramesetCreateSchema(BaseModel):
-    name: str
-    material: str | None = None
-    geometry_id: int
-
-
 class BuildKitCreateSchema(BaseModel):
     name: str
     groupset: str | None = None
@@ -84,4 +85,4 @@ class BuildKitCreateSchema(BaseModel):
 
 class SearchResult(BaseModel):
     total: int
-    items: list[BikeProductSchema]
+    items: list[BikeGroupSchema]

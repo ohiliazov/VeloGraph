@@ -5,42 +5,34 @@ from sqlalchemy.orm import selectinload
 
 from backend.config import es_settings
 from backend.core.db import SessionLocal
-from backend.core.models import BikeMetaORM
-from backend.core.utils import get_simple_types
+from backend.core.models import BikeProductORM
 
-INDEX_NAME = "bikes"
+INDEX_NAME = "bike_products"
 
 
-def serialize_bike(bike) -> dict:
+def serialize_bike(product: BikeProductORM) -> dict:
     """Converts ORM object to ES Document Dictionary."""
     return {
-        "_index": INDEX_NAME,  # Required for bulk helper
-        "_id": bike.id,  # Use DB ID as ES ID
+        "_index": INDEX_NAME,
+        "_id": product.id,
         "_source": {
-            "id": bike.id,
-            "brand": bike.brand,
-            "model_name": bike.model_name,
-            "model_year": bike.model_year,
-            "color": bike.color,
-            "frame_material": bike.frame_material,
-            "source_url": bike.source_url,
-            "max_tire_width": bike.max_tire_width,
-            "simple_type": get_simple_types(bike.categories),  # Normalized list
-            "category_original": " / ".join(bike.categories),  # For display
-            # Nested Geometries
-            "geometries": [
-                {
-                    "size_label": geo.size_label,
-                    "stack": geo.stack,
-                    "reach": geo.reach,
-                    "top_tube_effective_length": geo.top_tube_effective_length,
-                    "seat_tube_length": geo.seat_tube_length,
-                    "head_tube_angle": geo.head_tube_angle,
-                    "seat_tube_angle": geo.seat_tube_angle,
-                    "wheelbase": geo.wheelbase,
-                }
-                for geo in bike.geometries
-            ],
+            "id": product.id,
+            "sku": product.sku,
+            "colors": product.colors,
+            "frameset": {
+                "name": product.frameset.name,
+                "material": product.frameset.material,
+                "size_label": product.frameset.size_label,
+                "stack": product.frameset.stack,
+                "reach": product.frameset.reach,
+            },
+            "build_kit": {
+                "name": product.build_kit.name,
+                "groupset": product.build_kit.groupset,
+                "wheelset": product.build_kit.wheelset,
+                "cockpit": product.build_kit.cockpit,
+                "tires": product.build_kit.tires,
+            },
         },
     }
 
@@ -50,25 +42,25 @@ def create_index(es, index_name: str = INDEX_NAME):
     mapping = {
         "mappings": {
             "properties": {
-                "brand": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
-                "model_name": {"type": "text"},
-                "color": {"type": "keyword"},
-                "source_url": {"type": "keyword", "index": False},
-                "max_tire_width": {"type": "keyword", "index": False},
-                "simple_type": {"type": "keyword"},  # FAST filtering
-                "model_year": {"type": "integer"},
-                "geometries": {
-                    "type": "nested",  # Crucial for accurate size searching
+                "sku": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+                "colors": {"type": "keyword"},
+                "frameset": {
                     "properties": {
+                        "name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+                        "material": {"type": "keyword"},
                         "size_label": {"type": "keyword"},
                         "stack": {"type": "integer"},
                         "reach": {"type": "integer"},
-                        "top_tube_effective_length": {"type": "integer"},
-                        "seat_tube_length": {"type": "integer"},
-                        "head_tube_angle": {"type": "float"},
-                        "seat_tube_angle": {"type": "float"},
-                        "wheelbase": {"type": "integer"},
-                    },
+                    }
+                },
+                "build_kit": {
+                    "properties": {
+                        "name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+                        "groupset": {"type": "keyword"},
+                        "wheelset": {"type": "keyword"},
+                        "cockpit": {"type": "keyword"},
+                        "tires": {"type": "keyword"},
+                    }
                 },
             }
         }
@@ -84,19 +76,20 @@ def create_index(es, index_name: str = INDEX_NAME):
 
 def populate_index(es, session, index_name: str = INDEX_NAME):
     """Fetches all bikes from DB and pushes them to ES."""
-    logger.info(f"🔍 Fetching bikes from PostgreSQL for index '{index_name}'...")
+    logger.info(f"🔍 Fetching bike products from PostgreSQL for index '{index_name}'...")
 
-    # selectinload is CRITICAL: it fetches all geometries in 1 extra query
-    # instead of 1 query per bike (N+1 problem).
-    stmt = select(BikeMetaORM).options(selectinload(BikeMetaORM.geometries))
+    stmt = select(BikeProductORM).options(
+        selectinload(BikeProductORM.frameset),
+        selectinload(BikeProductORM.build_kit),
+    )
 
-    bikes = session.scalars(stmt).all()
-    logger.info(f"📊 Found {len(bikes)} bikes. Serializing...")
+    products = session.scalars(stmt).all()
+    logger.info(f"📊 Found {len(products)} products. Serializing...")
 
     # Prepare Generator for Bulk Indexing
     def actions_generator():
-        for bike in bikes:
-            doc = serialize_bike(bike)
+        for product in products:
+            doc = serialize_bike(product)
             doc["_index"] = index_name
             yield doc
 

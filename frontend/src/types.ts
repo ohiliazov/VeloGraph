@@ -1,4 +1,7 @@
-export interface Geometry {
+export interface Frameset {
+  id: number;
+  name: string;
+  material: string | null;
   size_label: string;
   stack: number;
   reach: number;
@@ -12,23 +15,31 @@ export interface Geometry {
   wheelbase: number;
 }
 
-export interface Bike {
+export interface BuildKit {
   id: number;
-  brand: string;
-  model_name: string;
-  model_year?: number;
-  color?: string;
-  categories: string[];
-  wheel_size?: string;
-  frame_material?: string;
-  brake_type?: string;
-  source_url?: string;
-  max_tire_width?: string;
-  user_id?: string;
-  geometries: Geometry[];
+  name: string;
+  groupset: string | null;
+  wheelset: string | null;
+  cockpit: string | null;
+  tires: string | null;
+}
+
+export interface BikeProduct {
+  id: number;
+  sku: string;
+  colors: string[];
+  frameset: Frameset;
+  build_kit: BuildKit;
+}
+
+export interface BikeGroup {
+  frameset_name: string;
+  material: string | null;
+  build_kit: BuildKit;
+  products: BikeProduct[];
 }
 
 export interface SearchResult {
   total: number;
-  items: Bike[];
+  items: BikeGroup[];
 }

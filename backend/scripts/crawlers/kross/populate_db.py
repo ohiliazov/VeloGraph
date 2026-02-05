@@ -8,7 +8,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from backend.core.db import SessionLocal
-from backend.core.models import BikeProductORM, BuildKitORM, FramesetORM, GeometryDataORM
+from backend.core.models import BikeProductORM, BuildKitORM, FramesetORM
 from backend.scripts.constants import artifacts_dir
 from backend.utils.helpers import extract_number
 
@@ -55,8 +55,11 @@ def populate_from_json(session: Session, json_path: Path):
     brand = "Kross"
     model_name = meta.get("model", "").strip()
     material = meta.get("material")
-    color = str(meta.get("color")).strip() if meta.get("color") else None
     model_year = meta.get("model_year")
+
+    # Get all colors to process from the new 'colors' field.
+    colors_data = meta.get("colors", [])
+    colors = [str(c.get("color")).strip() for c in colors_data] if colors_data else [None]
 
     if not model_name:
         logger.warning("⚠️ Skipping file {}: missing model name in meta", json_path.name)
@@ -88,6 +91,9 @@ def populate_from_json(session: Session, json_path: Path):
     def normalize_label(label: str) -> str:
         return " ".join(str(label).strip().split())
 
+    # Use a local cache for SKUs added in this SESSION to avoid DB roundtrips and flush errors
+    added_skus: set[str] = set()
+
     # 2. Process each size
     for idx, size_label in enumerate(sizes):
         norm_label = normalize_label(size_label)
@@ -95,55 +101,60 @@ def populate_from_json(session: Session, json_path: Path):
         try:
             payload = build_geometry_payload(specs, idx)
 
-            # 3. Get or create GeometryData
-            geometry = session.execute(
-                select(GeometryDataORM).where(
-                    GeometryDataORM.size_label == norm_label,
-                    GeometryDataORM.stack == payload["stack"],
-                    GeometryDataORM.reach == payload["reach"],
-                    GeometryDataORM.top_tube_effective_length == payload["top_tube_effective_length"],
-                    GeometryDataORM.seat_tube_length == payload["seat_tube_length"],
-                    GeometryDataORM.head_tube_length == payload["head_tube_length"],
-                    GeometryDataORM.chainstay_length == payload["chainstay_length"],
-                    GeometryDataORM.head_tube_angle == payload["head_tube_angle"],
-                    GeometryDataORM.seat_tube_angle == payload["seat_tube_angle"],
-                    GeometryDataORM.bb_drop == payload["bb_drop"],
-                    GeometryDataORM.wheelbase == payload["wheelbase"],
-                )
-            ).scalar_one_or_none()
-
-            if not geometry:
-                geometry = GeometryDataORM(size_label=norm_label, **payload)
-                session.add(geometry)
-                session.flush()
-
-            # 4. Get or create Frameset
+            # 3. Get or create Frameset (with embedded geometry)
             fs_name = f"{brand} {model_name}"
             frameset = session.execute(
                 select(FramesetORM).where(
                     FramesetORM.name == fs_name,
                     FramesetORM.material == material,
-                    FramesetORM.geometry_id == geometry.id,
+                    FramesetORM.size_label == norm_label,
+                    FramesetORM.stack == payload["stack"],
+                    FramesetORM.reach == payload["reach"],
+                    FramesetORM.top_tube_effective_length == payload["top_tube_effective_length"],
+                    FramesetORM.seat_tube_length == payload["seat_tube_length"],
+                    FramesetORM.head_tube_length == payload["head_tube_length"],
+                    FramesetORM.chainstay_length == payload["chainstay_length"],
+                    FramesetORM.head_tube_angle == payload["head_tube_angle"],
+                    FramesetORM.seat_tube_angle == payload["seat_tube_angle"],
+                    FramesetORM.bb_drop == payload["bb_drop"],
+                    FramesetORM.wheelbase == payload["wheelbase"],
                 )
             ).scalar_one_or_none()
 
             if not frameset:
-                frameset = FramesetORM(name=fs_name, material=material, geometry_id=geometry.id)
+                frameset = FramesetORM(name=fs_name, material=material, size_label=norm_label, **payload)
                 session.add(frameset)
                 session.flush()
 
-            # 5. Create BikeProduct (SKU = Brand-Model-Year-Color-Size)
-            sku_parts = [brand, model_name, str(model_year or ""), color or "", norm_label]
+            # 4. Create BikeProduct with color list
+            unique_colors = sorted(list(set(colors)))
+            # SKU = Brand-Model-Year-BuildKit-Size
+            sku_parts = [brand, model_name, str(model_year or ""), bk_name, norm_label]
             sku = "-".join(p.replace(" ", "-") for p in sku_parts if p).upper()
 
-            # Check if product exists
+            final_sku = sku
+            if final_sku in added_skus:
+                # Try to find a unique one
+                suffix = 1
+                while f"{final_sku}-{suffix}" in added_skus:
+                    suffix += 1
+                final_sku = f"{final_sku}-{suffix}"
+
+            # Double check DB
             existing_product = session.execute(
-                select(BikeProductORM).where(BikeProductORM.sku == sku)
+                select(BikeProductORM).where(BikeProductORM.sku == final_sku)
             ).scalar_one_or_none()
+
             if not existing_product:
-                product = BikeProductORM(sku=sku, frameset_id=frameset.id, build_kit_id=build_kit.id)
+                product = BikeProductORM(
+                    sku=final_sku, colors=unique_colors, frameset_id=frameset.id, build_kit_id=build_kit.id
+                )
                 session.add(product)
-                logger.debug("🆕 Added BikeProduct: {}", sku)
+                added_skus.add(final_sku)
+                logger.debug("🆕 Added BikeProduct: {} (Colors: {})", final_sku, unique_colors)
+            else:
+                added_skus.add(final_sku)
+                logger.warning("⚠️ SKU already exists in DB: {}", final_sku)
 
         except Exception as e:
             logger.error(f"Failed to process {model_name} size {size_label}: {e}")
@@ -154,9 +165,19 @@ def populate_directory(session: Session, json_dir: Path):
     Processes all JSON files in a directory and populates the database.
     """
     total_files = 0
-    for item in json_dir.glob("*.json"):
+    files = list(json_dir.glob("*.json"))
+    logger.info(f"📁 Found {len(files)} JSON files to process.")
+    for item in files:
         total_files += 1
-        populate_from_json(session, item)
+        try:
+            populate_from_json(session, item)
+            if total_files % 10 == 0:
+                session.commit()
+                logger.info(f"💾 Committed {total_files} files...")
+        except Exception as e:
+            logger.error(f"Error processing {item.name}: {e}")
+            session.rollback()
+    session.commit()
     return total_files
 
 
@@ -175,14 +196,15 @@ def main():
         logger.error(f"❌ Input directory '{args.input}' not found.")
         return
 
+    # Clear existing Kross bikes before repopulating
     with SessionLocal() as session:
-        # Clear existing Kross bikes before repopulating
-        logger.info("🗑️ Clearing existing 'Kross' products from database...")
-        # Since we use cascade or manually need to clean up, but for now let's just delete products
-        # Better: delete products where SKU starts with KROSS-
+        logger.info("🗑️ Clearing existing 'Kross' products and framesets from database...")
+        # Order matters for foreign keys
         session.execute(delete(BikeProductORM).where(BikeProductORM.sku.like("KROSS-%")))
-        session.flush()
+        session.execute(delete(FramesetORM).where(FramesetORM.name.like("Kross %")))
+        session.commit()
 
+    with SessionLocal() as session:
         count = populate_directory(session, args.input)
         session.commit()
         logger.success(f"✅ Done populating DB with Kross bike geometry: {count} files processed.")

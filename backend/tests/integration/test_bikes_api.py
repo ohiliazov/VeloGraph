@@ -1,10 +1,12 @@
-from backend.core.models import BikeProductORM, BuildKitORM, FramesetORM, GeometryDataORM
+from backend.core.models import BikeProductORM, BuildKitORM, FramesetORM
 
 
 def test_list_bike_products(client, mock_db):
     # Setup mock data
-    mock_geo = GeometryDataORM(
+    mock_fs = FramesetORM(
         id=1,
+        name="Esker",
+        material="Carbon",
         size_label="M",
         stack=580,
         reach=380,
@@ -17,12 +19,10 @@ def test_list_bike_products(client, mock_db):
         bb_drop=70,
         wheelbase=1020,
     )
-    mock_fs = FramesetORM(id=1, name="Esker", material="Carbon", geometry_id=1, geometry_data=mock_geo)
     mock_bk = BuildKitORM(id=1, name="GRX 600", groupset="Shimano GRX")
     mock_product = BikeProductORM(
-        id=1, sku="ESKER-6.0", frameset_id=1, build_kit_id=1, frameset=mock_fs, build_kit=mock_bk
+        id=1, sku="ESKER-6.0", frameset_id=1, build_kit_id=1, frameset=mock_fs, build_kit=mock_bk, colors=[]
     )
-
     mock_db.scalars.return_value.all.return_value = [mock_product]
 
     response = client.get("/api/bikes/")
@@ -30,14 +30,16 @@ def test_list_bike_products(client, mock_db):
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
-    assert data[0]["sku"] == "ESKER-6.0"
-    assert data[0]["frameset"]["name"] == "Esker"
-    assert data[0]["frameset"]["geometry_data"]["stack"] == 580
+    assert data[0]["frameset_name"] == "Esker"
+    assert data[0]["products"][0]["sku"] == "ESKER-6.0"
+    assert data[0]["products"][0]["frameset"]["stack"] == 580
 
 
 def test_get_bike_product_found(client, mock_db):
-    mock_geo = GeometryDataORM(
+    mock_fs = FramesetORM(
         id=1,
+        name="Esker",
+        material="Carbon",
         size_label="M",
         stack=580,
         reach=380,
@@ -50,17 +52,19 @@ def test_get_bike_product_found(client, mock_db):
         bb_drop=70,
         wheelbase=1020,
     )
-    mock_fs = FramesetORM(id=1, name="Esker", material="Carbon", geometry_id=1, geometry_data=mock_geo)
     mock_bk = BuildKitORM(id=1, name="GRX 600", groupset="Shimano GRX")
     mock_product = BikeProductORM(
-        id=1, sku="ESKER-6.0", frameset_id=1, build_kit_id=1, frameset=mock_fs, build_kit=mock_bk
+        id=1, sku="ESKER-6.0", frameset_id=1, build_kit_id=1, frameset=mock_fs, build_kit=mock_bk, colors=[]
     )
     mock_db.scalar.return_value = mock_product
+    mock_db.scalars.return_value.all.return_value = [mock_product]
 
     response = client.get("/api/bikes/1")
 
     assert response.status_code == 200
-    assert response.json()["sku"] == "ESKER-6.0"
+    data = response.json()
+    assert data["frameset_name"] == "Esker"
+    assert data["products"][0]["sku"] == "ESKER-6.0"
 
 
 def test_get_bike_product_not_found(client, mock_db):
@@ -77,8 +81,10 @@ def test_search_bike_products(client, mock_es, mock_db):
     mock_es.search.return_value = {"hits": {"total": {"value": 1}, "hits": [{"_source": {"id": 1}}]}}
 
     # Mock DB response
-    mock_geo = GeometryDataORM(
+    mock_fs = FramesetORM(
         id=1,
+        name="Esker",
+        material="Carbon",
         size_label="M",
         stack=580,
         reach=380,
@@ -91,10 +97,9 @@ def test_search_bike_products(client, mock_es, mock_db):
         bb_drop=70,
         wheelbase=1020,
     )
-    mock_fs = FramesetORM(id=1, name="Esker", material="Carbon", geometry_id=1, geometry_data=mock_geo)
     mock_bk = BuildKitORM(id=1, name="GRX 600", groupset="Shimano GRX")
     mock_product = BikeProductORM(
-        id=1, sku="ESKER-6.0", frameset_id=1, build_kit_id=1, frameset=mock_fs, build_kit=mock_bk
+        id=1, sku="ESKER-6.0", frameset_id=1, build_kit_id=1, frameset=mock_fs, build_kit=mock_bk, colors=[]
     )
     mock_db.scalars.return_value.all.return_value = [mock_product]
 
@@ -103,12 +108,15 @@ def test_search_bike_products(client, mock_es, mock_db):
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 1
-    assert data["items"][0]["sku"] == "ESKER-6.0"
+    assert data["items"][0]["frameset_name"] == "Esker"
+    assert data["items"][0]["products"][0]["sku"] == "ESKER-6.0"
 
 
 def test_create_bike_product(client, mock_db, mock_es):
-    mock_geo = GeometryDataORM(
+    mock_fs = FramesetORM(
         id=1,
+        name="Esker",
+        material="Carbon",
         size_label="M",
         stack=580,
         reach=380,
@@ -121,10 +129,9 @@ def test_create_bike_product(client, mock_db, mock_es):
         bb_drop=70,
         wheelbase=1020,
     )
-    mock_fs = FramesetORM(id=1, name="Esker", material="Carbon", geometry_id=1, geometry_data=mock_geo)
     mock_bk = BuildKitORM(id=1, name="GRX 600", groupset="Shimano GRX")
     mock_product = BikeProductORM(
-        id=1, sku="NEW-SKU", frameset_id=1, build_kit_id=1, frameset=mock_fs, build_kit=mock_bk
+        id=1, sku="NEW-SKU", frameset_id=1, build_kit_id=1, frameset=mock_fs, build_kit=mock_bk, colors=[]
     )
 
     # Mock behavior for creation

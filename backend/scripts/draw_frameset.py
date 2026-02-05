@@ -7,10 +7,9 @@ from pathlib import Path
 import svgwrite
 from loguru import logger
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
 from backend.core.db import SessionLocal
-from backend.core.models import FramesetORM, GeometryDataORM
+from backend.core.models import FramesetORM
 from backend.scripts.constants import artifacts_dir
 
 # --- Geometry rendering helpers ---
@@ -30,17 +29,17 @@ def sanitize_filename(value: str) -> str:
     return s or "unnamed"
 
 
-def compute_points(geom: GeometryDataORM) -> dict[str, tuple[float, float]]:
+def compute_points(fs: FramesetORM) -> dict[str, tuple[float, float]]:
     # Inputs from DB are already in mm/degrees according to ORM
-    stack_mm = geom.stack
-    reach_mm = geom.reach
-    bb_drop_mm = geom.bb_drop
-    chainstay_mm = geom.chainstay_length
-    seat_tube_mm = geom.seat_tube_length
-    seat_tube_angle = geom.seat_tube_angle
-    head_tube_mm = geom.head_tube_length
-    head_tube_angle = geom.head_tube_angle
-    wheelbase_mm = geom.wheelbase
+    stack_mm = fs.stack
+    reach_mm = fs.reach
+    bb_drop_mm = fs.bb_drop
+    chainstay_mm = fs.chainstay_length
+    seat_tube_mm = fs.seat_tube_length
+    seat_tube_angle = fs.seat_tube_angle
+    head_tube_mm = fs.head_tube_length
+    head_tube_angle = fs.head_tube_angle
+    wheelbase_mm = fs.wheelbase
 
     bb = (0.0, -float(bb_drop_mm))
     rear_axle = (-float(chainstay_mm), 0.0)
@@ -100,8 +99,8 @@ def compute_canvas(points: dict[str, tuple[float, float]]) -> tuple[int, int, fl
     return svg_w, svg_h, tx, ty
 
 
-def render_svg(frameset: FramesetORM, geom: GeometryDataORM, out_path: Path) -> None:
-    points = compute_points(geom)
+def render_svg(frameset: FramesetORM, out_path: Path) -> None:
+    points = compute_points(frameset)
     svg_w, svg_h, tx, ty = compute_canvas(points)
 
     dwg = svgwrite.Drawing(str(out_path), size=(f"{svg_w}px", f"{svg_h}px"))
@@ -155,7 +154,7 @@ def main() -> None:
 
     count = 0
     with SessionLocal() as session:
-        stmt = select(FramesetORM).options(selectinload(FramesetORM.geometry_data))
+        stmt = select(FramesetORM)
         framesets = session.scalars(stmt).all()
 
         if not framesets:
@@ -163,13 +162,12 @@ def main() -> None:
             return
 
         for frameset in framesets:
-            geom = frameset.geometry_data
             name = frameset.name or "unknown"
-            size = geom.size_label or "size"
+            size = frameset.size_label or "size"
             fname = f"{sanitize_filename(name)}_{sanitize_filename(size)}.svg"
             out_path = output_dir / fname
             try:
-                render_svg(frameset, geom, out_path)
+                render_svg(frameset, out_path)
                 count += 1
                 logger.debug("Rendered {} → {}", f"{name} [{size}]", out_path)
             except Exception:

@@ -1,19 +1,18 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { Bike, Geometry } from "@/types";
+import { BikeProduct, Geometry } from "@/types";
 
 export interface ComparisonItem {
-  bike: Bike;
-  geometry: Geometry;
+  product: BikeProduct;
 }
 
 interface ComparisonContextType {
   comparisonList: ComparisonItem[];
-  addToCompare: (bike: Bike, geometry: Geometry) => void;
-  removeFromCompare: (bikeId: number, sizeLabel: string) => void;
+  addToCompare: (product: BikeProduct) => void;
+  removeFromCompare: (productId: number) => void;
   clearComparison: () => void;
-  isInComparison: (bikeId: number, sizeLabel: string) => boolean;
+  isInComparison: (productId: number) => boolean;
 }
 
 const ComparisonContext = createContext<ComparisonContextType | undefined>(
@@ -31,7 +30,20 @@ export const ComparisonProvider: React.FC<{ children: React.ReactNode }> = ({
       const saved = localStorage.getItem("comparisonList");
       if (saved) {
         try {
-          setComparisonList(JSON.parse(saved));
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            // Basic validation to ensure data matches new schema
+            const validated = parsed.filter(
+              (item) =>
+                item &&
+                typeof item === "object" &&
+                item.product &&
+                typeof item.product.id === "number" &&
+                item.product.frameset &&
+                typeof item.product.frameset.size_label === "string",
+            );
+            setComparisonList(validated);
+          }
         } catch (e) {
           console.error("Failed to parse comparison list", e);
         }
@@ -46,27 +58,18 @@ export const ComparisonProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [comparisonList, isInitialized]);
 
-  const addToCompare = (bike: Bike, geometry: Geometry) => {
+  const addToCompare = (product: BikeProduct) => {
     setComparisonList((prev) => {
-      if (
-        prev.some(
-          (item) =>
-            item.bike.id === bike.id &&
-            item.geometry.size_label === geometry.size_label,
-        )
-      ) {
+      if (prev.some((item) => item.product.id === product.id)) {
         return prev;
       }
-      return [...prev, { bike, geometry }];
+      return [...prev, { product }];
     });
   };
 
-  const removeFromCompare = (bikeId: number, sizeLabel: string) => {
+  const removeFromCompare = (productId: number) => {
     setComparisonList((prev) =>
-      prev.filter(
-        (item) =>
-          !(item.bike.id === bikeId && item.geometry.size_label === sizeLabel),
-      ),
+      prev.filter((item) => item.product.id !== productId),
     );
   };
 
@@ -74,11 +77,8 @@ export const ComparisonProvider: React.FC<{ children: React.ReactNode }> = ({
     setComparisonList([]);
   };
 
-  const isInComparison = (bikeId: number, sizeLabel: string) => {
-    return comparisonList.some(
-      (item) =>
-        item.bike.id === bikeId && item.geometry.size_label === sizeLabel,
-    );
+  const isInComparison = (productId: number) => {
+    return comparisonList.some((item) => item?.product?.id === productId);
   };
 
   return (
