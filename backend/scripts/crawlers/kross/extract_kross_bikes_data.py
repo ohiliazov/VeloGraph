@@ -1,15 +1,58 @@
 import argparse
-import json
 import re
 import sys
 from pathlib import Path
-from typing import Any
 
-from bs4 import BeautifulSoup, Tag
+from bs4 import BeautifulSoup, SoupStrainer, Tag
 from loguru import logger
+from pydantic import BaseModel, Field
 
+from backend.core.models import BuildKit
 from backend.scripts.constants import artifacts_dir
 from backend.utils.helpers import extract_number
+
+# --- Models ---
+
+
+class KrossBikeMeta(BaseModel):
+    brand: str = "Kross"
+    model: str
+    categories: list[str] = Field(default_factory=list)
+    model_year: int | None = None
+    wheel_size: str | None = None
+    max_tire_width: float | str | None = None
+    material: str | None = None
+    color: str | None = None
+    source_url: str = ""
+
+
+class ExtractedBikeData(BaseModel):
+    meta: KrossBikeMeta
+    build_kit: BuildKit
+    sizes: list[str]
+    specs: dict[str, list[float | int | str | None]]
+
+
+# --- Constants ---
+RELEVANT_GEO_KEYS = {
+    "Stack",
+    "Reach",
+    "TT - efektywna długość górnej rury",
+    "ST - Długość rury podsiodłowej",
+    "HT - Długość główki ramy",
+    "CS - Długość tylnych widełek",
+    "HA - Kąt główki ramy",
+    "SA - Kąt rury podsiodłowej",
+    "BBDROP",
+    "WB - Baza kół",
+}
+
+COMPONENT_KEYWORDS = {
+    "groupset": {"przerzutka", "manetki", "korba", "kaseta", "łańcuch"},
+    "wheelset": {"piasta", "obręcze", "obręcz", "szprychy", "nyple", "koła"},
+    "cockpit": {"kierownica", "wspornik", "siodło", "stery", "chwyty", "owijka", "pedał"},
+    "tires": {"opony"},
+}
 
 
 def clean_value(value: str) -> str | int | float:
@@ -65,172 +108,214 @@ def normalize_wheel_size(value: str | int | float | None) -> str | None:
     return val_str
 
 
-def extract_bike_data(html: str) -> dict[str, Any]:
-    """
-    Parses Kross bike HTML.
-    Always returns a dictionary with 'meta'.
-    If geometry table is found, 'has_geometry' is True and 'specs' are populated.
-    """
-    # Use 'lxml' for speed
-    try:
-        soup = BeautifulSoup(html, "lxml")
-    except Exception:
-        soup = BeautifulSoup(html, "html.parser")
-
-    # --- 1. Extract Metadata (Always done) ---
-    bike_meta = {
+def _extract_meta(soup: BeautifulSoup) -> KrossBikeMeta:
+    """Extracts basic metadata from BeautifulSoup object."""
+    meta_data = {
         "brand": "Kross",
         "model": "",
         "categories": [],
         "model_year": None,
         "wheel_size": None,
         "max_tire_width": None,
+        "material": None,
+        "color": None,
         "source_url": "",
     }
-    for prop in ["og:title", "og:url", "og:image"]:
-        tag = soup.find("meta", property=prop)
-        if tag and isinstance(tag, Tag):
-            content = tag.get("content", "").strip()
-            bike_meta[prop] = content
-            if prop == "og:url":
-                bike_meta["source_url"] = content
 
-    # Extract model name from og:title if it looks like "Model | Kross"
-    if "og:title" in bike_meta:
-        title = bike_meta["og:title"]
+    # OG tags
+    title_tag = soup.find("meta", property="og:title")
+    if title_tag and isinstance(title_tag, Tag):
+        title = title_tag.get("content", "").strip()
         if " | " in title:
-            bike_meta["model"] = title.split(" | ")[0].strip()
+            meta_data["model"] = title.split(" | ")[0].strip()
 
+    url_tag = soup.find("meta", property="og:url")
+    if url_tag and isinstance(url_tag, Tag):
+        meta_data["source_url"] = url_tag.get("content", "").strip()
+
+    # Heuristic for color from URL
+    if meta_data["source_url"] and meta_data["model"]:
+        url_path = meta_data["source_url"].split("/")[-1]
+        model_slug = meta_data["model"].lower().replace(" ", "-").replace(".", "-")
+        if model_slug in url_path:
+            color_part = url_path.split(model_slug)[-1].strip("-")
+            if color_part:
+                meta_data["color"] = color_part.replace("-", " ")
+
+    # Breadcrumbs & Year
     breadcrumbs = soup.find("div", class_="product-breadcrumbs")
     if breadcrumbs:
-        # Use a more robust split for the breadcrumb separator
         raw_text = breadcrumbs.get_text(strip=True)
-        # The separator is usually something like " / " with non-breaking spaces
         raw_cats = [c.strip() for c in re.split(r"\s*/\s*", raw_text)]
-        cleaned_cats = []
         for c in raw_cats:
-            c = c.strip()
-            if not c:
-                continue
-            # Check if it's a year
             if c.isdigit() and len(c) == 4 and 2000 <= int(c) <= 2100:
-                bike_meta["model_year"] = int(c)
-                continue
-            cleaned_cats.append(c)
-        bike_meta["categories"] = cleaned_cats
+                meta_data["model_year"] = int(c)
+            elif c:
+                meta_data["categories"].append(c)
 
-    # --- 1b. Extract from Additional Attributes (Specyfikacja) ---
+    return KrossBikeMeta(**meta_data)
+
+
+def _categorize_component(attr_name: str, attr_content: str, components: dict[str, list[str]]):
+    """Categorizes a component attribute into the components dictionary."""
+    attr_lower = attr_name.lower()
+    for cat, keywords in COMPONENT_KEYWORDS.items():
+        if any(kw in attr_lower for kw in keywords):
+            if cat == "tires":
+                components[cat].append(attr_content)
+            elif cat == "wheelset" and "rozmiar" in attr_lower:
+                continue
+            else:
+                components[cat].append(f"{attr_name.capitalize()}: {attr_content}")
+            return True
+    return False
+
+
+def _assemble_build_kit(components: dict[str, list[str]]) -> BuildKit:
+    """Assembles the final BuildKit model from categorized components."""
+    # Deduplicate while preserving order
+    bk_data = {k: " | ".join(dict.fromkeys(v)) if v else None for k, v in components.items()}
+
+    # Heuristic for BuildKit name from groupset (rear derailleur)
+    bk_data["name"] = "Standard Build"
+    if components["groupset"]:
+        rd = next((s for s in components["groupset"] if "Przerzutka tył" in s), None)
+        if rd and ": " in rd:
+            rd_val = rd.split(": ", 1)[1]
+            words = rd_val.split()
+            if len(words) >= 2:
+                name = " ".join(words[:2])
+                if len(words) >= 3 and words[2].startswith("R"):
+                    name = " ".join(words[:3])
+                bk_data["name"] = name
+            else:
+                bk_data["name"] = rd_val
+
+    return BuildKit(**bk_data)
+
+
+def extract_bike_data(html: str) -> ExtractedBikeData | None:
+    """
+    Parses Kross bike HTML.
+    Returns an ExtractedBikeData model or None if geometry is missing.
+    """
+    # Use SoupStrainer to only parse the parts of the document we care about
+    # This significantly speeds up BeautifulSoup parsing
+    strainer = SoupStrainer(["meta", "div", "table"])
+    try:
+        soup = BeautifulSoup(html, "lxml", parse_only=strainer)
+    except Exception:
+        soup = BeautifulSoup(html, "html.parser", parse_only=strainer)
+
+    bike_meta = _extract_meta(soup)
+    components = {k: [] for k in COMPONENT_KEYWORDS}
+
+    # --- 1. Extract from Additional Attributes (Specyfikacja) ---
     spec_tables = soup.find_all("table", class_="additional-attributes-table")
     for table in spec_tables:
         for row in table.find_all("tr"):
             title_cell = row.find("td", class_="box-title")
             content_cell = row.find("td", class_="box-content")
-            if title_cell and content_cell:
-                attr_name = title_cell.get_text(strip=True).lower()
-                attr_content = content_cell.get_text(strip=True)
+            if not (title_cell and content_cell):
+                continue
 
-                # Check for max tire width
-                if "maksymalna szerokość opony" in attr_name or "max_tire_width" in title_cell.get("class", []):
-                    bike_meta["max_tire_width"] = clean_value(attr_content)
+            attr_name = title_cell.get_text(strip=True)
+            attr_content = content_cell.get_text(strip=True)
+            attr_lower = attr_name.lower()
 
-                # Check for wheel size (from Opony if not set)
-                if not bike_meta["wheel_size"] and ("opony" in attr_name or "tires" in title_cell.get("class", [])):
-                    match = re.search(r"(\d{3})x|(\d{2}[.,]\d)\"|(\d{2})\"", attr_content, re.IGNORECASE)
-                    if match:
-                        val = match.group(1) or match.group(2) or match.group(3)
-                        bike_meta["wheel_size"] = normalize_wheel_size(val)
+            # Metadata updates
+            if "rama" in attr_lower:
+                bike_meta.material = attr_content
+            elif "maksymalna szerokość opony" in attr_lower:
+                bike_meta.max_tire_width = clean_value(attr_content)
+            elif not bike_meta.wheel_size and "opony" in attr_lower:
+                match = re.search(r"(\d{3})x|(\d{2}[.,]\d)\"|(\d{2})\"", attr_content, re.IGNORECASE)
+                if match:
+                    val = match.group(1) or match.group(2) or match.group(3)
+                    bike_meta.wheel_size = normalize_wheel_size(val)
 
-    # --- 2. Find the Geometry Table ---
+            # BuildKit components
+            _categorize_component(attr_name, attr_content, components)
+
+    # --- 2. Find and Extract Geometry Table ---
     target_table = None
-    all_tables = soup.find_all("table")
-
-    for table in all_tables:
+    for table in soup.find_all("table"):
         thead = table.find("thead")
-        if thead:
-            first_th = thead.find("th")
-            if first_th and "Rozmiar" in first_th.get_text():
-                target_table = table
-                break
-
-    # Prepare return structure
-    result = {
-        "meta": bike_meta,
-        "sizes": [],
-        "specs": {},
-        "has_geometry": False,  # Flag to indicate success
-    }
+        if thead and thead.find("th") and "Rozmiar" in thead.find("th").get_text():
+            target_table = table
+            break
 
     if not target_table:
-        return result
+        return None
 
-    # --- 3. Extract Table Data ---
-    bike_sizes: list[str] = []
-    bike_specs: dict[str, list[Any]] = {}
+    # --- 3. Extract Table Data (Sizes & Specs) ---
+    bike_sizes = []
+    bike_specs = {}
 
-    # 3a. Headers (Sizes)
+    # Headers (Sizes)
     header_row = target_table.find("thead").find("tr")
     if not header_row:
-        return result
+        return None
 
     for th in header_row.find_all("th")[1:]:
         size_text = th.get_text(strip=True)
         bike_sizes.append(size_text)
 
-        # If wheel size still not found, try to get it from header like "M (19\") 28\""
-        if not bike_meta["wheel_size"]:
-            match = re.search(r"(\d{2}[.,]\d)\"|(\d{2})\"", size_text)
-            if match:
-                # Usually the last one is the wheel size.
-                re.findall(r"(\d{2}[.,]\d)\"|(\d{2})\"", size_text)
-                # Findall with groups returns tuples if there are multiple groups
-                # Let's use a simpler approach
-                all_matches = []
-                for m in re.finditer(r"(\d{2}[.,]\d)\"|(\d{2})\"", size_text):
-                    all_matches.append(m.group(1) or m.group(2))
+        # Wheel size from header if missing
+        if not bike_meta.wheel_size:
+            matches = [m.group(1) or m.group(2) for m in re.finditer(r"(\d{2}[.,]\d)\"|(\d{2})\"", size_text)]
+            if matches:
+                # Use last match if multiple (likely wheel size), otherwise use first if no parentheses
+                val = matches[-1] if len(matches) > 1 else (matches[0] if "(" not in size_text else None)
+                if val:
+                    bike_meta.wheel_size = normalize_wheel_size(val)
 
-                if len(all_matches) > 1:
-                    bike_meta["wheel_size"] = normalize_wheel_size(all_matches[-1])
-                elif len(all_matches) == 1 and "(" not in size_text:
-                    bike_meta["wheel_size"] = normalize_wheel_size(all_matches[0])
-
-    # 3b. Rows (Specs)
+    # Body (Specs)
     tbody = target_table.find("tbody")
     if tbody:
         for row in tbody.find_all("tr"):
             cells = row.find_all("td")
-
             if not cells:
                 continue
-
             attr_name = cells[0].get_text(strip=True)
-
-            values = []
-            for cell in cells[1:]:
-                values.append(clean_value(cell.get_text(strip=True)))
-
-            # Integrity check
-            if len(values) < len(bike_sizes):
-                values.extend([None] * (len(bike_sizes) - len(values)))
-
+            values = [clean_value(cell.get_text(strip=True)) for cell in cells[1:]]
+            # Pad values if shorter than sizes
+            values.extend([None] * (len(bike_sizes) - len(values)))
             bike_specs[attr_name] = values
 
-            # Extra: if we haven't found wheel size yet, check geometry table row "Rozmiar kół"
-            if not bike_meta["wheel_size"] and "rozmiar kół" in attr_name.lower():
-                # Take the first non-empty value
-                for v in values:
-                    if v:
-                        v_str = str(v)
-                        match = re.search(r"(\d{3})|(\d{2}[.,]\d)|(\d{2})", v_str)
-                        if match:
-                            bike_meta["wheel_size"] = normalize_wheel_size(match.group(0))
-                            break
+    # Wheel size from geometry row if still missing
+    if not bike_meta.wheel_size:
+        for attr, vals in bike_specs.items():
+            if "rozmiar kół" in attr.lower():
+                for v in (v for v in vals if v):
+                    match = re.search(r"(\d{3})|(\d{2}[.,]\d)|(\d{2})", str(v))
+                    if match:
+                        bike_meta.wheel_size = normalize_wheel_size(match.group(0))
+                        break
+                if bike_meta.wheel_size:
+                    break
 
-    # Update result with found data
-    result["sizes"] = bike_sizes
-    result["specs"] = bike_specs
-    result["has_geometry"] = True
+    # Extract additional components from geometry table
+    for attr_name, values in bike_specs.items():
+        if not (values and any(values)):
+            continue
 
-    return result
+        rep_val = None
+        for v in (v for v in values if v):
+            v_str = str(v)
+            if len(re.sub(r"[0-9.,\s\-\*/°'\"(kg)(mm)(c)]", "", v_str, flags=re.IGNORECASE)) > 2:
+                rep_val = v_str
+                break
+
+        if rep_val:
+            _categorize_component(attr_name, rep_val, components)
+
+    return ExtractedBikeData(
+        meta=bike_meta,
+        build_kit=_assemble_build_kit(components),
+        sizes=bike_sizes,
+        specs={k: v for k, v in bike_specs.items() if k in RELEVANT_GEO_KEYS},
+    )
 
 
 def process_file(html_path: Path, json_dir: Path, force: bool = False) -> bool:
@@ -242,16 +327,16 @@ def process_file(html_path: Path, json_dir: Path, force: bool = False) -> bool:
         content = html_path.read_text(encoding="utf-8")
         data = extract_bike_data(content)
 
-        if data["has_geometry"]:
-            # Remove the internal flag before saving to clean JSON
-            del data["has_geometry"]
-
+        if data:
             json_path = json_dir / html_path.with_suffix(".json").name
             if json_path.exists() and not force:
                 logger.debug(f"⚠️  Skipping {html_path.name}: JSON already exists")
                 return False
 
-            json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+            json_path.write_text(
+                data.model_dump_json(indent=2),
+                encoding="utf-8",
+            )
             logger.debug(f"✅ Saved JSON: {json_path.name}")
             return True
         else:
