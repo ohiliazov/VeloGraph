@@ -1,5 +1,6 @@
 import argparse
 import json
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -42,11 +43,10 @@ def build_geometry_payload(specs: dict[str, list[Any]], idx: int) -> dict[str, A
     return payload
 
 
-def populate_from_json(session: Session, json_path: Path):
+def populate_from_json_data(session: Session, data: dict[str, Any], source_name: str):
     """
-    Populates the database with data from a single JSON file.
+    Populates the database with data from a JSON-like dictionary.
     """
-    data = json.loads(json_path.read_text(encoding="utf-8"))
     meta = data.get("meta", {})
     build_kit_data = data.get("build_kit", {})
     sizes = data.get("sizes", [])
@@ -62,7 +62,7 @@ def populate_from_json(session: Session, json_path: Path):
     colors = [str(c.get("color")).strip() for c in colors_data] if colors_data else [None]
 
     if not model_name:
-        logger.warning("⚠️ Skipping file {}: missing model name in meta", json_path.name)
+        logger.warning("⚠️ Skipping {}: missing model name in meta", source_name)
         return
 
     # 1. Get or create BuildKit
@@ -160,6 +160,14 @@ def populate_from_json(session: Session, json_path: Path):
             logger.error(f"Failed to process {model_name} size {size_label}: {e}")
 
 
+def populate_from_json(session: Session, json_path: Path):
+    """
+    Populates the database with data from a single JSON file.
+    """
+    data = json.loads(json_path.read_text(encoding="utf-8"))
+    populate_from_json_data(session, data, json_path.name)
+
+
 def populate_directory(session: Session, json_dir: Path):
     """
     Processes all JSON files in a directory and populates the database.
@@ -181,6 +189,31 @@ def populate_directory(session: Session, json_dir: Path):
     return total_files
 
 
+def populate_from_archive(session: Session, json_zip: Path):
+    """
+    Processes all JSON files in a zip archive and populates the database.
+    """
+    total_files = 0
+    with zipfile.ZipFile(json_zip, "r") as z:
+        json_files = [n for n in z.namelist() if n.endswith(".json")]
+        logger.info(f"📦 Found {len(json_files)} JSON files in archive {json_zip.name}.")
+
+        for json_name in json_files:
+            total_files += 1
+            try:
+                data = json.loads(z.read(json_name).decode("utf-8"))
+                populate_from_json_data(session, data, json_name)
+                if total_files % 10 == 0:
+                    session.commit()
+                    logger.info(f"💾 Committed {total_files} files...")
+            except Exception as e:
+                logger.error(f"Error processing {json_name}: {e}")
+                session.rollback()
+
+    session.commit()
+    return total_files
+
+
 def main():
     parser = argparse.ArgumentParser(description="Populate database with Kross bike data from JSON files.")
     parser.add_argument(
@@ -192,10 +225,6 @@ def main():
 
     args = parser.parse_args()
 
-    if not args.input.exists():
-        logger.error(f"❌ Input directory '{args.input}' not found.")
-        return
-
     # Clear existing Kross bikes before repopulating
     with SessionLocal() as session:
         logger.info("🗑️ Clearing existing 'Kross' products and framesets from database...")
@@ -205,7 +234,16 @@ def main():
         session.commit()
 
     with SessionLocal() as session:
-        count = populate_directory(session, args.input)
+        # Priority to archive if it exists
+        archive_input = args.input.with_suffix(".zip")
+        if archive_input.exists():
+            count = populate_from_archive(session, archive_input)
+        elif args.input.exists():
+            count = populate_directory(session, args.input)
+        else:
+            logger.error(f"❌ Input '{args.input}' (directory or zip) not found.")
+            return
+
         session.commit()
         logger.success(f"✅ Done populating DB with Kross bike geometry: {count} files processed.")
 

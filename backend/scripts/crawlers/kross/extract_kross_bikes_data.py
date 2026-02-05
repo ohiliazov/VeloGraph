@@ -1,6 +1,8 @@
 import argparse
 import re
+import shutil
 import sys
+import zipfile
 from pathlib import Path
 
 from bs4 import BeautifulSoup, SoupStrainer, Tag
@@ -332,6 +334,76 @@ def extract_bike_data(html: str) -> ExtractedBikeData | None:
     )
 
 
+def process_archive(html_zip: Path, json_dir: Path, force: bool = False):
+    """
+    Processes all HTML files in a zip archive.
+    Groups color variants.
+    """
+    json_dir.mkdir(parents=True, exist_ok=True)
+    logger.info(f"📦 Scanning archive: {html_zip}...")
+
+    processed_htmls = set()
+    files_processed = 0
+    skipped_count = 0
+
+    with zipfile.ZipFile(html_zip, "r") as z:
+        html_files = [n for n in z.namelist() if n.endswith(".html")]
+
+        # Sort files to be deterministic
+        for html_name in sorted(html_files):
+            if html_name in processed_htmls:
+                continue
+
+            try:
+                content = z.read(html_name).decode("utf-8")
+                data = extract_bike_data(content)
+
+                if data:
+                    # Mark variants as processed
+                    for v in data.meta.colors:
+                        processed_htmls.add(v.html_path)
+
+                    # Mark current file as processed
+                    processed_htmls.add(html_name)
+
+                    json_name = Path(html_name).with_suffix(".json").name
+                    json_path = json_dir / json_name
+                    if json_path.exists() and not force:
+                        logger.debug(f"⚠️  Skipping {html_name}: JSON already exists")
+                        skipped_count += 1
+                        continue
+
+                    json_path.write_text(
+                        data.model_dump_json(indent=2),
+                        encoding="utf-8",
+                    )
+                    logger.debug(f"✅ Saved JSON: {json_path.name}")
+                    files_processed += 1
+                else:
+                    logger.warning(f"⚠️  Skipped {html_name}: No geometry table found")
+                    skipped_count += 1
+                    processed_htmls.add(html_name)
+            except Exception:
+                logger.exception(f"🚨 Critical error processing {html_name}")
+                skipped_count += 1
+                processed_htmls.add(html_name)
+
+    logger.success(f"🏁 Done. Processed: {files_processed} | Skipped: {skipped_count}")
+
+    # Finalizer: Archive extracted_jsons
+    archive_path = json_dir.parent / "extracted_jsons.zip"
+    logger.info("📦 Archiving extracted_jsons to {}...", archive_path)
+    with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for json_file in json_dir.glob("*.json"):
+            zipf.write(json_file, arcname=json_file.name)
+    logger.success("✅ JSON archive created: {}", archive_path)
+
+    # Remove the folder after archiving
+    if json_dir.exists():
+        shutil.rmtree(json_dir)
+        logger.info("🗑️ Removed original folder: {}", json_dir)
+
+
 def process_directory(html_dir: Path, json_dir: Path, force: bool = False):
     """
     Processes all HTML files in a directory.
@@ -405,11 +477,15 @@ def main():
 
     args = parser.parse_args()
 
-    if not args.input.exists():
-        logger.error(f"❌ Input directory '{args.input}' not found.")
+    # Priority to archive if it exists
+    archive_input = args.input.with_suffix(".zip")
+    if archive_input.exists():
+        process_archive(archive_input, args.output, args.force)
+    elif args.input.exists():
+        process_directory(args.input, args.output, args.force)
+    else:
+        logger.error(f"❌ Input '{args.input}' (directory or zip) not found.")
         sys.exit(1)
-
-    process_directory(args.input, args.output, args.force)
 
 
 if __name__ == "__main__":

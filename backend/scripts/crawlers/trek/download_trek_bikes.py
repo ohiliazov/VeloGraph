@@ -1,5 +1,6 @@
 import json
 import time
+import zipfile
 from urllib.parse import urljoin, urlparse
 
 from loguru import logger
@@ -16,8 +17,7 @@ trek_artifacts.mkdir(parents=True, exist_ok=True)
 
 trek_bike_urls_path = trek_artifacts / "bike_urls.json"
 
-trek_bike_htmls_path = trek_artifacts / "raw_htmls"
-trek_bike_htmls_path.mkdir(parents=True, exist_ok=True)
+trek_bike_archive_path = trek_artifacts / "raw_htmls.zip"
 
 
 def normalize_url(href: str) -> str:
@@ -96,6 +96,12 @@ def load_urls() -> list[str]:
 
 
 def download_bike_pages(urls: list[str]):
+    # Determine which HTMLs already exist in the archive
+    existing: set[str] = set()
+    if trek_bike_archive_path.exists():
+        with zipfile.ZipFile(trek_bike_archive_path, "r") as zread:
+            existing = set(zread.namelist())
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
@@ -107,20 +113,23 @@ def download_bike_pages(urls: list[str]):
         )
 
         total = len(urls)
-        for idx, url in enumerate(urls, start=1):
-            slug = slug_from_url(url)
-            out_path = trek_bike_htmls_path / f"{slug}.html"
+        # Open the archive in append mode once and stream pages into it
+        with zipfile.ZipFile(trek_bike_archive_path, "a", zipfile.ZIP_DEFLATED) as zwrite:
+            for idx, url in enumerate(urls, start=1):
+                slug = slug_from_url(url)
+                name = f"{slug}.html"
 
-            if out_path.exists():
-                logger.debug("⏭️ [{:d}/{:d}] Skipping existing HTML for {}", idx, total, url)
-                continue
+                if name in existing:
+                    logger.debug("⏭️ [{:d}/{:d}] Skipping existing HTML for {}", idx, total, url)
+                    continue
 
-            logger.info("⬇️ [{:d}/{:d}] Fetching: {}", idx, total, url)
-            page.goto(url, wait_until="load")
-            time.sleep(1)  # allow extra JS rendering time
+                logger.info("⬇️ [{:d}/{:d}] Fetching: {}", idx, total, url)
+                page.goto(url, wait_until="load")
+                time.sleep(1)  # allow extra JS rendering time
 
-            out_path.write_text(page.content(), encoding="utf-8")
-            logger.debug("💾 Saved HTML to {} (slug: {})", out_path, slug)
+                html = page.content()
+                zwrite.writestr(name, html)
+                logger.debug("💾 Saved HTML to archive {} (entry: {}, slug: {})", trek_bike_archive_path, name, slug)
 
         browser.close()
 
