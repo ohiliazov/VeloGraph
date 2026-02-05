@@ -4,7 +4,7 @@ import time
 from loguru import logger
 from playwright.sync_api import sync_playwright
 
-from scripts.constants import artifacts_dir
+from backend.scripts.constants import artifacts_dir
 
 kross_artifacts = artifacts_dir / "kross"
 kross_bike_urls_path = kross_artifacts / "bike_urls.json"

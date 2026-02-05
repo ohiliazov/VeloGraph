@@ -52,6 +52,44 @@ services:
     networks:
       - velograph_net
 
+  # --- Backend (FastAPI) ---
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: velograph_backend
+    environment:
+      POSTGRES_USER: velograph
+      POSTGRES_PASSWORD: velograph
+      POSTGRES_DB: velograph
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: 9200
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - elasticsearch
+    networks:
+      - velograph_net
+
+  # --- Frontend (Next.js) ---
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: velograph_frontend
+    environment:
+      # Keep API URL pointing to host-published backend for browser requests
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - velograph_net
+
 volumes:
   pg_data:
     driver: local

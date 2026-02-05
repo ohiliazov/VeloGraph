@@ -7,10 +7,10 @@ from loguru import logger
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.core.db import SessionLocal
-from app.core.models import BikeGeometryORM, BikeMetaORM
-from app.utils.helpers import extract_number
-from scripts.constants import artifacts_dir
+from backend.core.db import SessionLocal
+from backend.core.models import BikeGeometryORM, BikeMetaORM
+from backend.scripts.constants import artifacts_dir
+from backend.utils.helpers import extract_number
 
 # Normalize wheel size values to BSD string codes used by FE
 INCH_TO_BSD: dict[float, str] = {

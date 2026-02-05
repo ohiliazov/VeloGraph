@@ -2,8 +2,8 @@ from loguru import logger
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.config import pg_settings
-from app.core.models import Base
+from backend.config import pg_settings
+from backend.core.models import Base
 
 engine = create_engine(pg_settings.connection_string)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

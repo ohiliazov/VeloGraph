@@ -9,9 +9,9 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.core.db import SessionLocal
-from app.core.models import BikeGeometryORM, BikeMetaORM
-from scripts.constants import artifacts_dir
+from backend.core.db import SessionLocal
+from backend.core.models import BikeGeometryORM, BikeMetaORM
+from backend.scripts.constants import artifacts_dir
 
 # --- Geometry rendering helpers ---
 FRAME_COLOR = "blue"

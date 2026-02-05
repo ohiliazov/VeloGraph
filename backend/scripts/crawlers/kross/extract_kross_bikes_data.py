@@ -8,8 +8,8 @@ from typing import Any
 from bs4 import BeautifulSoup, Tag
 from loguru import logger
 
-from app.utils.helpers import extract_number
-from scripts.constants import artifacts_dir
+from backend.scripts.constants import artifacts_dir
+from backend.utils.helpers import extract_number
 
 
 def clean_value(value: str) -> str | int | float:

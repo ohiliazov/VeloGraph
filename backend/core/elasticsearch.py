@@ -1,6 +1,6 @@
 from elasticsearch import AsyncElasticsearch
 
-from app.config import es_settings
+from backend.config import es_settings
 
 es_client = AsyncElasticsearch(
     hosts=[es_settings.url],

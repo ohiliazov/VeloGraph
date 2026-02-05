@@ -1,4 +1,4 @@
-from app.core.utils import get_simple_types
+from backend.core.utils import get_simple_types
 
 
 def test_get_simple_types_empty():

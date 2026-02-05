@@ -3,10 +3,10 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.config import es_settings
-from app.core.db import SessionLocal
-from app.core.models import BikeMetaORM
-from app.core.utils import get_simple_types
+from backend.config import es_settings
+from backend.core.db import SessionLocal
+from backend.core.models import BikeMetaORM
+from backend.core.utils import get_simple_types
 
 INDEX_NAME = "bikes"
 

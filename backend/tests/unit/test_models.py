@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.core.models import BikeGeometry
+from backend.core.models import BikeGeometry
 
 
 def test_bike_geometry_valid():

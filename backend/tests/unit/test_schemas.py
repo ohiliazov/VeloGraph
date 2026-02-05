@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from app.api.schemas import BikeSchema, BikeUpdateSchema, GeometrySchema
+from backend.api.schemas import BikeSchema, BikeUpdateSchema, GeometrySchema
 
 
 def test_geometry_schema_valid():

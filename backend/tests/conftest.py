@@ -4,9 +4,9 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.__main__ import app
-from app.core.db import get_db
-from app.core.elasticsearch import get_es_client
+from backend.__main__ import app
+from backend.core.db import get_db
+from backend.core.elasticsearch import get_es_client
 
 
 @pytest.fixture

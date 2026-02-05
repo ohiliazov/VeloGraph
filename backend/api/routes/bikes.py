@@ -5,11 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.schemas import BikeSchema, BikeUpdateSchema, SearchResult
-from app.core.db import get_db
-from app.core.elasticsearch import get_es_client
-from app.core.models import BikeGeometryORM, BikeMetaORM
-from app.core.utils import get_simple_types
+from backend.api.schemas import BikeSchema, BikeUpdateSchema, SearchResult
+from backend.core.db import get_db
+from backend.core.elasticsearch import get_es_client
+from backend.core.models import BikeGeometryORM, BikeMetaORM
+from backend.core.utils import get_simple_types
 
 router = APIRouter()
 

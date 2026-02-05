@@ -1,4 +1,4 @@
-from app.core.models import BikeGeometryORM, BikeMetaORM
+from backend.core.models import BikeGeometryORM, BikeMetaORM
 
 
 def test_list_bikes(client, mock_db):
