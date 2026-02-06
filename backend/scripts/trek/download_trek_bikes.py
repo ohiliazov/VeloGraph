@@ -4,8 +4,8 @@ from urllib.parse import urljoin, urlparse
 from loguru import logger
 from playwright.sync_api import sync_playwright
 
+from backend.scripts.base import BaseBikeCrawler
 from backend.scripts.constants import artifacts_dir
-from backend.scripts.crawlers.base import BaseBikeCrawler
 
 START_URL = "https://www.trekbikes.com/pl/pl_PL/rowery/c/B100/?pageSize=72&q=%3Arelevance&sort=relevance#"
 BASE_URL = "https://www.trekbikes.com"

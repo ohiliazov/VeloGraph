@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from backend.core.db import SessionLocal
 from backend.core.models import BikeProductORM, BuildKitORM, FramesetORM
+from backend.core.utils import get_simple_types
 from backend.scripts.constants import artifacts_dir
 from backend.utils.helpers import extract_number
 
@@ -55,7 +56,10 @@ def populate_from_json_data(session: Session, data: dict[str, Any], source_name:
     brand = "Kross"
     model_name = meta.get("model", "").strip()
     material = meta.get("material")
+    categories = meta.get("categories", [])
     model_year = meta.get("model_year")
+
+    category = get_simple_types(categories)[0] if categories else "other"
 
     # Get all colors to process from the new 'colors' field.
     colors_data = meta.get("colors", [])
@@ -122,7 +126,9 @@ def populate_from_json_data(session: Session, data: dict[str, Any], source_name:
             ).scalar_one_or_none()
 
             if not frameset:
-                frameset = FramesetORM(name=fs_name, material=material, size_label=norm_label, **payload)
+                frameset = FramesetORM(
+                    name=fs_name, material=material, category=category, size_label=norm_label, **payload
+                )
                 session.add(frameset)
                 session.flush()
 
@@ -147,7 +153,11 @@ def populate_from_json_data(session: Session, data: dict[str, Any], source_name:
 
             if not existing_product:
                 product = BikeProductORM(
-                    sku=final_sku, colors=unique_colors, frameset_id=frameset.id, build_kit_id=build_kit.id
+                    sku=final_sku,
+                    colors=unique_colors,
+                    frameset_id=frameset.id,
+                    build_kit_id=build_kit.id,
+                    source_url=meta.get("source_url"),
                 )
                 session.add(product)
                 added_skus.add(final_sku)

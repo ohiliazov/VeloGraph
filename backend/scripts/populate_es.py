@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 from backend.config import es_settings
 from backend.core.db import SessionLocal
 from backend.core.models import BikeProductORM
+from backend.core.utils import get_material_group
 
 INDEX_NAME = "bike_products"
 
@@ -19,10 +20,13 @@ def serialize_bike(product: BikeProductORM) -> dict:
             "id": product.id,
             "sku": product.sku,
             "colors": product.colors,
+            "source_url": product.source_url,
             "frameset": {
                 "name": product.frameset.name,
                 "material": product.frameset.material,
+                "material_group": get_material_group(product.frameset.material),
                 "size_label": product.frameset.size_label,
+                "category": product.frameset.category,
                 "stack": product.frameset.stack,
                 "reach": product.frameset.reach,
             },
@@ -44,11 +48,14 @@ def create_index(es, index_name: str = INDEX_NAME):
             "properties": {
                 "sku": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
                 "colors": {"type": "keyword"},
+                "source_url": {"type": "keyword", "index": False},
                 "frameset": {
                     "properties": {
                         "name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
                         "material": {"type": "keyword"},
+                        "material_group": {"type": "keyword"},
                         "size_label": {"type": "keyword"},
+                        "category": {"type": "keyword"},
                         "stack": {"type": "integer"},
                         "reach": {"type": "integer"},
                     }

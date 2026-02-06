@@ -29,3 +29,21 @@ def get_simple_types(categories: list[str]) -> list[str]:
         results.add("other")
 
     return sorted(list(results))
+
+
+def get_material_group(material: str | None) -> str:
+    """Groups messy material names into simplified categories."""
+    if not material:
+        return "other"
+
+    mat = material.lower()
+    if any(x in mat for x in ["carbon", "węgiel", "węglow"]):
+        return "carbon"
+    if any(x in mat for x in ["aluminum", "aluminium", "aluninium", "alu"]):
+        return "aluminum"
+    if any(x in mat for x in ["steel", "stal", "crmo", "chromoly"]):
+        return "steel"
+    if any(x in mat for x in ["titanium", "tytan"]):
+        return "titanium"
+
+    return "other"

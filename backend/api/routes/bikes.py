@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.api.schemas import (
+    BikeCategory,
     BikeGroupSchema,
     BikeProductCreateSchema,
     BikeProductSchema,
@@ -13,27 +14,15 @@ from backend.api.schemas import (
     BuildKitSchema,
     FramesetCreateSchema,
     FramesetSchema,
+    MaterialGroup,
     SearchResult,
 )
 from backend.core.db import get_db
 from backend.core.elasticsearch import get_es_client
 from backend.core.models import BikeProductORM, BuildKitORM, FramesetORM
+from backend.core.utils import get_material_group
 
 router = APIRouter()
-
-
-@router.get("/", response_model=list[BikeGroupSchema])
-def list_bike_products(db: Annotated[Session, Depends(get_db)], limit: int = 50):
-    stmt = (
-        select(BikeProductORM)
-        .options(
-            selectinload(BikeProductORM.frameset),
-            selectinload(BikeProductORM.build_kit),
-        )
-        .limit(limit)
-    )
-    products = db.scalars(stmt).all()
-    return _group_products(products)
 
 
 def _group_products(products: list[BikeProductORM]) -> list[dict]:
@@ -86,46 +75,46 @@ def create_build_kit(data: BuildKitCreateSchema, db: Annotated[Session, Depends(
 async def search_bike_products(
     es: Annotated[AsyncElasticsearch, Depends(get_es_client)],
     db: Annotated[Session, Depends(get_db)],
-    q: str = Query(None),
-    material: str = Query(None),
-    groupset: str = Query(None),
-    stack_min: int = Query(None),
-    stack_max: int = Query(None),
-    reach_min: int = Query(None),
-    reach_max: int = Query(None),
+    stack: Annotated[int, Query(description="Target stack in mm")],
+    reach: Annotated[int, Query(description="Target reach in mm")],
+    page: Annotated[int, Query(ge=1)] = 1,
+    size: Annotated[int, Query(ge=1, le=100)] = 10,
+    category: Annotated[BikeCategory | None, Query()] = None,
+    material: Annotated[MaterialGroup | None, Query()] = None,
 ):
-    must = []
-    if q:
-        must.append({"multi_match": {"query": q, "fields": ["sku", "frameset.name", "build_kit.name"]}})
-
     filters = []
+    if category:
+        filters.append({"term": {"frameset.category": category.value}})
     if material:
-        filters.append({"term": {"frameset.material.keyword": material}})
-    if groupset:
-        filters.append({"term": {"build_kit.groupset.keyword": groupset}})
+        filters.append({"term": {"frameset.material_group": material.value}})
 
-    if stack_min is not None or stack_max is not None:
-        range_filter = {}
-        if stack_min is not None:
-            range_filter["gte"] = stack_min
-        if stack_max is not None:
-            range_filter["lte"] = stack_max
-        filters.append({"range": {"frameset.stack": range_filter}})
+    must = []
 
-    if reach_min is not None or reach_max is not None:
-        range_filter = {}
-        if reach_min is not None:
-            range_filter["gte"] = reach_min
-        if reach_max is not None:
-            range_filter["lte"] = reach_max
-        filters.append({"range": {"frameset.reach": range_filter}})
+    # Script-based sorting for Euclidean distance from target (stack, reach)
+    # distance = sqrt((actual_stack - target_stack)^2 + (actual_reach - target_reach)^2)
+    # We use a script to calculate this distance and sort by it ascending.
+    sort_script = {
+        "_script": {
+            "type": "number",
+            "script": {
+                "lang": "painless",
+                "source": """
+                    double dStack = doc['frameset.stack'].value - params.targetStack;
+                    double dReach = doc['frameset.reach'].value - params.targetReach;
+                    return Math.sqrt(dStack * dStack + dReach * dReach);
+                """,
+                "params": {"targetStack": stack, "targetReach": reach},
+            },
+            "order": "asc",
+        }
+    }
 
     query = {"bool": {"must": must, "filter": filters}}
 
-    if not must and not filters:
-        query = {"match_all": {}}
+    # Pagination
+    from_ = (page - 1) * size
 
-    resp = await es.search(index="bike_products", query=query, size=20)
+    resp = await es.search(index="bike_products", query=query, sort=[sort_script], from_=from_, size=size)
 
     total = resp["hits"]["total"]["value"]
     product_ids = [hit["_source"]["id"] for hit in resp["hits"]["hits"]]
@@ -147,8 +136,7 @@ async def search_bike_products(
     product_map = {p.id: p for p in products}
     sorted_products = [product_map[pid] for pid in product_ids if pid in product_map]
 
-    grouped = _group_products(sorted_products)
-    return {"total": len(grouped), "items": grouped}
+    return {"total": total, "items": sorted_products}
 
 
 @router.get("/{product_id}", response_model=BikeGroupSchema)
@@ -226,10 +214,13 @@ async def sync_product_to_es(product: BikeProductORM, es: AsyncElasticsearch):
         "id": product.id,
         "sku": product.sku,
         "colors": product.colors,
+        "source_url": product.source_url,
         "frameset": {
             "name": product.frameset.name,
             "material": product.frameset.material,
+            "material_group": get_material_group(product.frameset.material),
             "size_label": product.frameset.size_label,
+            "category": product.frameset.category,
             "stack": product.frameset.stack,
             "reach": product.frameset.reach,
         },

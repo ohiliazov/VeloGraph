@@ -83,6 +83,7 @@ class Frameset(BaseModel):
 
     name: str
     material: str | None = None
+    category: str = "other"
     size_label: str
     stack: PositiveInt
     reach: PositiveInt
@@ -128,6 +129,7 @@ class FramesetORM(Base):
 
     stack: Mapped[int] = mapped_column(nullable=False)
     reach: Mapped[int] = mapped_column(nullable=False)
+    category: Mapped[str] = mapped_column(nullable=False, server_default="other")
     top_tube_effective_length: Mapped[int] = mapped_column(nullable=False)
     seat_tube_length: Mapped[int] = mapped_column(nullable=False)
     head_tube_length: Mapped[int] = mapped_column(nullable=False)
@@ -161,6 +163,7 @@ class BikeProductORM(Base):
     colors: Mapped[list[str]] = mapped_column(sa.JSON, nullable=False, server_default="[]")
     frameset_id: Mapped[int] = mapped_column(ForeignKey("framesets.id"), nullable=False)
     build_kit_id: Mapped[int] = mapped_column(ForeignKey("build_kits.id"), nullable=False)
+    source_url: Mapped[str | None] = mapped_column(sa.String(1024))
 
     frameset: Mapped[FramesetORM] = relationship(back_populates="bike_products")
     build_kit: Mapped[BuildKitORM] = relationship(back_populates="bike_products")

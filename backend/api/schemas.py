@@ -1,10 +1,34 @@
+from enum import Enum
+
 from pydantic import BaseModel, ConfigDict
+
+
+class BikeCategory(str, Enum):
+    GRAVEL = "gravel"
+    MTB = "mtb"
+    TREKKING = "trekking"
+    CROSS = "cross"
+    ROAD = "road"
+    CITY = "city"
+    KIDS = "kids"
+    TOURING = "touring"
+    WOMEN = "women"
+    OTHER = "other"
+
+
+class MaterialGroup(str, Enum):
+    CARBON = "carbon"
+    ALUMINUM = "aluminum"
+    STEEL = "steel"
+    TITANIUM = "titanium"
+    OTHER = "other"
 
 
 class FramesetSchema(BaseModel):
     id: int
     name: str
     material: str | None = None
+    category: str
     size_label: str
     stack: int
     reach: int
@@ -35,6 +59,7 @@ class BikeProductSchema(BaseModel):
     id: int
     sku: str
     colors: list[str] = []
+    source_url: str | None = None
     frameset: FramesetSchema
     build_kit: BuildKitSchema
 
@@ -62,6 +87,7 @@ class BikeProductCreateSchema(BaseModel):
 class FramesetCreateSchema(BaseModel):
     name: str
     material: str | None = None
+    category: str = "other"
     size_label: str
     stack: int
     reach: int
@@ -85,4 +111,4 @@ class BuildKitCreateSchema(BaseModel):
 
 class SearchResult(BaseModel):
     total: int
-    items: list[BikeGroupSchema]
+    items: list[BikeProductSchema]

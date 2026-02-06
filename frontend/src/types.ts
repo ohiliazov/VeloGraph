@@ -1,7 +1,29 @@
+export enum BikeCategory {
+  GRAVEL = "gravel",
+  MTB = "mtb",
+  TREKKING = "trekking",
+  CROSS = "cross",
+  ROAD = "road",
+  CITY = "city",
+  KIDS = "kids",
+  TOURING = "touring",
+  WOMEN = "women",
+  OTHER = "other",
+}
+
+export enum MaterialGroup {
+  CARBON = "carbon",
+  ALUMINUM = "aluminum",
+  STEEL = "steel",
+  TITANIUM = "titanium",
+  OTHER = "other",
+}
+
 export interface Frameset {
   id: number;
   name: string;
   material: string | null;
+  category: string;
   size_label: string;
   stack: number;
   reach: number;
@@ -28,6 +50,7 @@ export interface BikeProduct {
   id: number;
   sku: string;
   colors: string[];
+  source_url: string | null;
   frameset: Frameset;
   build_kit: BuildKit;
 }
@@ -41,5 +64,5 @@ export interface BikeGroup {
 
 export interface SearchResult {
   total: number;
-  items: BikeGroup[];
+  items: BikeProduct[];
 }
