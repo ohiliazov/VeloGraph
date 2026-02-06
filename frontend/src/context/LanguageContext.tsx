@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { Language, translations } from "../translations";
+import { Language, translations, supportedLanguages } from "../translations";
 
 interface LanguageContextType {
   language: Language;
@@ -19,10 +19,26 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
   const [language, setLanguageState] = useState<Language>("en");
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedLang = localStorage.getItem("language") as Language;
-      if (savedLang && (savedLang === "en" || savedLang === "uk")) {
-        setLanguageState(savedLang);
+    if (typeof window === "undefined") return;
+
+    const allowed = new Set(supportedLanguages.map((l) => l.code));
+
+    const saved = localStorage.getItem("language");
+    if (saved && allowed.has(saved as Language)) {
+      setLanguageState(saved as Language);
+      return;
+    }
+
+    const navLangs = (navigator.languages || [navigator.language])
+      .filter(Boolean)
+      .map((l) => (l || "").toLowerCase());
+
+    for (const lang of navLangs) {
+      const base = (lang.split("-")[0] || "").toLowerCase();
+      if (base === "ru" || base === "be") continue; // explicitly exclude
+      if (allowed.has(base as Language)) {
+        setLanguageState(base as Language);
+        return;
       }
     }
   }, []);

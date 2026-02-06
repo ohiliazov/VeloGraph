@@ -9,7 +9,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-12">
-      <header className="max-w-4xl mx-auto px-6 mb-12 flex justify-between items-start">
+      <header className="max-w-4xl mx-auto px-6 mb-12 flex justify-between items-start relative z-40">
         <div>
           <h1 className="text-4xl font-extrabold text-gray-900 tracking-tight">
             VeloGraph
