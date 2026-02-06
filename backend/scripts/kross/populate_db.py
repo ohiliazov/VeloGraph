@@ -45,9 +45,6 @@ def build_geometry_payload(specs: dict[str, list[Any]], idx: int) -> dict[str, A
 
 
 def populate_from_json_data(session: Session, data: dict[str, Any], source_name: str):
-    """
-    Populates the database with data from a JSON-like dictionary.
-    """
     meta = data.get("meta", {})
     build_kit_data = data.get("build_kit", {})
     sizes = data.get("sizes", [])
@@ -61,7 +58,6 @@ def populate_from_json_data(session: Session, data: dict[str, Any], source_name:
 
     category = get_simple_types(categories)[0] if categories else "other"
 
-    # Get all colors to process from the new 'colors' field.
     colors_data = meta.get("colors", [])
     colors = [str(c.get("color")).strip() for c in colors_data] if colors_data else [None]
 
@@ -69,7 +65,6 @@ def populate_from_json_data(session: Session, data: dict[str, Any], source_name:
         logger.warning("⚠️ Skipping {}: missing model name in meta", source_name)
         return
 
-    # 1. Get or create BuildKit
     bk_name = build_kit_data.get("name") or "Standard Build"
     build_kit = session.execute(
         select(BuildKitORM).where(
@@ -95,17 +90,14 @@ def populate_from_json_data(session: Session, data: dict[str, Any], source_name:
     def normalize_label(label: str) -> str:
         return " ".join(str(label).strip().split())
 
-    # Use a local cache for SKUs added in this SESSION to avoid DB roundtrips and flush errors
     added_skus: set[str] = set()
 
-    # 2. Process each size
     for idx, size_label in enumerate(sizes):
         norm_label = normalize_label(size_label)
 
         try:
             payload = build_geometry_payload(specs, idx)
 
-            # 3. Get or create Frameset (with embedded geometry)
             fs_name = f"{brand} {model_name}"
             frameset = session.execute(
                 select(FramesetORM).where(
@@ -132,21 +124,17 @@ def populate_from_json_data(session: Session, data: dict[str, Any], source_name:
                 session.add(frameset)
                 session.flush()
 
-            # 4. Create BikeProduct with color list
             unique_colors = sorted(list(set(colors)))
-            # SKU = Brand-Model-Year-BuildKit-Size
             sku_parts = [brand, model_name, str(model_year or ""), bk_name, norm_label]
             sku = "-".join(p.replace(" ", "-") for p in sku_parts if p).upper()
 
             final_sku = sku
             if final_sku in added_skus:
-                # Try to find a unique one
                 suffix = 1
                 while f"{final_sku}-{suffix}" in added_skus:
                     suffix += 1
                 final_sku = f"{final_sku}-{suffix}"
 
-            # Double check DB
             existing_product = session.execute(
                 select(BikeProductORM).where(BikeProductORM.sku == final_sku)
             ).scalar_one_or_none()
@@ -171,17 +159,11 @@ def populate_from_json_data(session: Session, data: dict[str, Any], source_name:
 
 
 def populate_from_json(session: Session, json_path: Path):
-    """
-    Populates the database with data from a single JSON file.
-    """
     data = json.loads(json_path.read_text(encoding="utf-8"))
     populate_from_json_data(session, data, json_path.name)
 
 
 def populate_directory(session: Session, json_dir: Path):
-    """
-    Processes all JSON files in a directory and populates the database.
-    """
     total_files = 0
     files = list(json_dir.glob("*.json"))
     logger.info(f"📁 Found {len(files)} JSON files to process.")
@@ -200,9 +182,6 @@ def populate_directory(session: Session, json_dir: Path):
 
 
 def populate_from_archive(session: Session, json_zip: Path):
-    """
-    Processes all JSON files in a zip archive and populates the database.
-    """
     total_files = 0
     with zipfile.ZipFile(json_zip, "r") as z:
         json_files = [n for n in z.namelist() if n.endswith(".json")]
@@ -235,16 +214,13 @@ def main():
 
     args = parser.parse_args()
 
-    # Clear existing Kross bikes before repopulating
     with SessionLocal() as session:
         logger.info("🗑️ Clearing existing 'Kross' products and framesets from database...")
-        # Order matters for foreign keys
         session.execute(delete(BikeProductORM).where(BikeProductORM.sku.like("KROSS-%")))
         session.execute(delete(FramesetORM).where(FramesetORM.name.like("Kross %")))
         session.commit()
 
     with SessionLocal() as session:
-        # Priority to archive if it exists
         archive_input = args.input.with_suffix(".zip")
         if archive_input.exists():
             count = populate_from_archive(session, archive_input)

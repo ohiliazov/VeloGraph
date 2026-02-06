@@ -463,4 +463,4 @@ pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/python,jetbrains+all,nextjs,macos,node
 
-.artifacts/
+.output.txt

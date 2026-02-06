@@ -39,7 +39,12 @@ def test_search_geometry(client, mock_es, mock_db):
 
 def test_search_keyword(client, mock_es, mock_db):
     # Mock ES response
-    mock_es.search.return_value = {"hits": {"total": {"value": 1}, "hits": [{"_source": {"id": 1}}]}}
+    mock_es.search.return_value = {
+        "hits": {
+            "total": {"value": 1},
+            "hits": [{"_source": {"frameset_name": "Esker", "material": "Carbon", "product_ids": [1]}}],
+        }
+    }
 
     # Mock DB response
     mock_fs = FramesetORM(
@@ -143,6 +148,7 @@ def test_create_bike_product(client, mock_db, mock_es):
     # Mock behavior for creation
     mock_db.refresh.side_effect = lambda x: setattr(x, "id", 1)
     mock_db.scalar.return_value = mock_product
+    mock_db.scalars.return_value.all.return_value = [mock_product]
 
     create_data = {"sku": "NEW-SKU", "frameset_id": 1, "build_kit_id": 1}
 
@@ -151,8 +157,9 @@ def test_create_bike_product(client, mock_db, mock_es):
     assert response.status_code == 200
     assert response.json()["sku"] == "NEW-SKU"
 
-    # Verify ES call
-    mock_es.index.assert_called_once()
-    es_call_args = mock_es.index.call_args[1]
-    assert es_call_args["index"] == "bike_products"
-    assert es_call_args["document"]["sku"] == "NEW-SKU"
+    # Verify ES calls
+    assert mock_es.index.call_count == 2
+    # Second call is for the group
+    group_call_args = mock_es.index.call_args_list[1][1]
+    assert group_call_args["index"] == "bike_products"
+    assert "NEW-SKU" in group_call_args["document"]["skus"]

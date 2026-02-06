@@ -12,12 +12,6 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def init_db(drop_all: bool = False):
-    """
-    Initializes the database schema.
-    Note: It is recommended to use Alembic for migrations instead of this function
-    in production.
-    :param drop_all: If True, drops all existing tables before creating new ones.
-    """
     try:
         if drop_all:
             logger.warning("Re-initializing database: dropping all tables...")

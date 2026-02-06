@@ -30,6 +30,7 @@ export default function BikeSearch() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [selectedProductIds, setSelectedProductIds] = useState<
     Record<string, number>
   >({});
@@ -102,13 +103,51 @@ export default function BikeSearch() {
 
   useEffect(() => {
     // Only fetch if search criteria are met
-    if (canSearch) {
+    if (isInitialized && canSearch) {
       searchBikes();
-    } else {
+    } else if (isInitialized) {
       setResults([]);
       setTotal(0);
     }
-  }, [searchBikes, canSearch]);
+  }, [searchBikes, canSearch, isInitialized]);
+
+  // Load state on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("bikeSearchState");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed.stack) setStack(parsed.stack);
+          if (parsed.reach) setReach(parsed.reach);
+          if (parsed.category) setCategory(parsed.category);
+          if (parsed.material) setMaterial(parsed.material);
+          if (parsed.query) setQuery(parsed.query);
+          if (parsed.activeTab) setActiveTab(parsed.activeTab);
+          if (parsed.page) setPage(parsed.page);
+        } catch (e) {
+          console.error("Failed to parse saved search state", e);
+        }
+      }
+      setIsInitialized(true);
+    }
+  }, []);
+
+  // Save state whenever it changes
+  useEffect(() => {
+    if (isInitialized && typeof window !== "undefined") {
+      const stateToSave = {
+        stack,
+        reach,
+        category,
+        material,
+        query,
+        activeTab,
+        page,
+      };
+      localStorage.setItem("bikeSearchState", JSON.stringify(stateToSave));
+    }
+  }, [stack, reach, category, material, query, activeTab, page, isInitialized]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -233,7 +272,10 @@ export default function BikeSearch() {
               <input
                 type="text"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setPage(1);
+                }}
                 placeholder={t.ui.search_placeholder}
                 className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all"
               />
@@ -259,7 +301,10 @@ export default function BikeSearch() {
           </label>
           <select
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            onChange={(e) => {
+              setCategory(e.target.value);
+              setPage(1);
+            }}
             className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all appearance-none cursor-pointer"
           >
             <option value="">{t.categories.all_categories}</option>
@@ -276,7 +321,10 @@ export default function BikeSearch() {
           </label>
           <select
             value={material}
-            onChange={(e) => setMaterial(e.target.value)}
+            onChange={(e) => {
+              setMaterial(e.target.value);
+              setPage(1);
+            }}
             className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all appearance-none cursor-pointer"
           >
             <option value="">{t.ui.all_materials}</option>
@@ -298,7 +346,10 @@ export default function BikeSearch() {
                 <input
                   type="number"
                   value={stack}
-                  onChange={(e) => setStack(e.target.value)}
+                  onChange={(e) => {
+                    setStack(e.target.value);
+                    setPage(1);
+                  }}
                   placeholder="e.g. 580"
                   className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all"
                   required
@@ -316,7 +367,10 @@ export default function BikeSearch() {
                 <input
                   type="number"
                   value={reach}
-                  onChange={(e) => setReach(e.target.value)}
+                  onChange={(e) => {
+                    setReach(e.target.value);
+                    setPage(1);
+                  }}
                   placeholder="e.g. 400"
                   className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all"
                   required

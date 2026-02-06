@@ -1,49 +1,49 @@
+from backend.api.schemas import BikeCategory, MaterialGroup
+from backend.core.constants import CATEGORY_PATTERNS, MATERIAL_PATTERNS
+from backend.core.models import BikeProductORM
+
+
 def get_simple_types(categories: list[str]) -> list[str]:
-    """Normalizes messy categories into strict filter types."""
     if not categories:
-        return ["other"]
+        return [BikeCategory.OTHER.value]
 
     results = set()
     for category_str in categories:
-        cat = category_str.lower()
-        if "gravel" in cat:
-            results.add("gravel")
-        if "mtb" in cat or "górsk" in cat:
-            results.add("mtb")
-        if "trekking" in cat:
-            results.add("trekking")
-        if "cross" in cat:
-            results.add("cross")
-        if "szos" in cat or "road" in cat:
-            results.add("road")
-        if "miejsk" in cat or "city" in cat:
-            results.add("city")
-        if "dzieci" in cat or "kids" in cat or "junior" in cat:
-            results.add("kids")
-        if "turyst" in cat:
-            results.add("touring")
-        if "damsk" in cat or "women" in cat:
-            results.add("women")
+        for cat_enum, pattern in CATEGORY_PATTERNS.items():
+            if pattern.search(category_str):
+                results.add(cat_enum.value)
 
     if not results:
-        results.add("other")
+        results.add(BikeCategory.OTHER.value)
 
     return sorted(list(results))
 
 
 def get_material_group(material: str | None) -> str:
-    """Groups messy material names into simplified categories."""
     if not material:
-        return "other"
+        return MaterialGroup.OTHER.value
 
-    mat = material.lower()
-    if any(x in mat for x in ["carbon", "węgiel", "węglow"]):
-        return "carbon"
-    if any(x in mat for x in ["aluminum", "aluminium", "aluninium", "alu"]):
-        return "aluminum"
-    if any(x in mat for x in ["steel", "stal", "crmo", "chromoly"]):
-        return "steel"
-    if any(x in mat for x in ["titanium", "tytan"]):
-        return "titanium"
+    for mat_enum, pattern in MATERIAL_PATTERNS.items():
+        if pattern.search(material):
+            return mat_enum.value
 
-    return "other"
+    return MaterialGroup.OTHER.value
+
+
+def group_bike_product(product: BikeProductORM, siblings: list[BikeProductORM]) -> dict:
+    return {
+        "frameset_name": product.frameset.name,
+        "material": product.frameset.material,
+        "material_group": get_material_group(product.frameset.material),
+        "category": product.frameset.category,
+        "build_kit": {
+            "name": product.build_kit.name,
+            "groupset": product.build_kit.groupset,
+            "wheelset": product.build_kit.wheelset,
+            "cockpit": product.build_kit.cockpit,
+            "tires": product.build_kit.tires,
+        },
+        "skus": [p.sku for p in siblings],
+        "product_ids": [p.id for p in siblings],
+        "sizes": [p.frameset.size_label for p in siblings],
+    }

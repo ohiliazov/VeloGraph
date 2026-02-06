@@ -5,14 +5,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class GeometryData(BaseModel):
-    """
-    Comprehensive Pydantic model for bicycle frameset geometry.
-    Measurements are in millimeters (mm) and angles in degrees (°).
-    """
-
     model_config = {"populate_by_name": True, "from_attributes": True}
 
-    # --- Group 1: Rider Fit (The 'Box' the rider occupies) ---
     stack: PositiveInt = Field(
         description=(
             "The vertical distance from the center of the Bottom Bracket to the center of the top of the head tube. "
@@ -33,7 +27,6 @@ class GeometryData(BaseModel):
         ),
     )
 
-    # --- Group 2: Frame Tubes (Physical dimensions) ---
     seat_tube_length: PositiveInt = Field(
         alias="ST",
         description=(
@@ -49,7 +42,6 @@ class GeometryData(BaseModel):
         description="The distance from the BB center to the rear axle. Shorter is snappier; longer is more stable.",
     )
 
-    # --- Group 3: Chassis Angles (The 'Soul' of the handling) ---
     head_tube_angle: float = Field(
         ge=60.0,
         le=75.0,
@@ -63,7 +55,6 @@ class GeometryData(BaseModel):
         description="Angle relative to horizontal. Steep angles (75°+) help with climbing and power transfer.",
     )
 
-    # --- Group 4: Positioning & Footprint ---
     bb_drop: PositiveInt = Field(
         description=(
             "How far the BB center sits below the horizontal line connecting the axles. "

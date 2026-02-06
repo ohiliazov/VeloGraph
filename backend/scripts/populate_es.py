@@ -7,11 +7,10 @@ from backend.config import es_settings
 from backend.core.constants import BIKE_PRODUCT_INDEX, FRAMESET_GEOMETRY_INDEX
 from backend.core.db import SessionLocal
 from backend.core.models import BikeProductORM
-from backend.core.utils import get_material_group
+from backend.core.utils import get_material_group, group_bike_product
 
 
 def serialize_bike(product: BikeProductORM) -> dict:
-    """Converts ORM object to ES Document Dictionary."""
     return {
         "_index": FRAMESET_GEOMETRY_INDEX,
         "_id": product.id,
@@ -41,36 +40,17 @@ def serialize_bike(product: BikeProductORM) -> dict:
 
 
 def serialize_group(group_key: tuple, products: list[BikeProductORM]) -> dict:
-    """Converts a group of products to an ES Document."""
-    # group_key = (name, material, build_kit_id)
     rep = products[0]
-    # Create a deterministic ID for the group
     group_id = f"{rep.frameset.name}-{rep.frameset.material}-{rep.build_kit_id}".replace(" ", "-").lower()
 
     return {
         "_index": BIKE_PRODUCT_INDEX,
         "_id": group_id,
-        "_source": {
-            "frameset_name": rep.frameset.name,
-            "material": rep.frameset.material,
-            "material_group": get_material_group(rep.frameset.material),
-            "category": rep.frameset.category,
-            "build_kit": {
-                "name": rep.build_kit.name,
-                "groupset": rep.build_kit.groupset,
-                "wheelset": rep.build_kit.wheelset,
-                "cockpit": rep.build_kit.cockpit,
-                "tires": rep.build_kit.tires,
-            },
-            "skus": [p.sku for p in products],
-            "product_ids": [p.id for p in products],
-            "sizes": [p.frameset.size_label for p in products],
-        },
+        "_source": group_bike_product(rep, products),
     }
 
 
 def create_index(es, index_name: str = FRAMESET_GEOMETRY_INDEX):
-    """Creates the index with the correct mapping if it doesn't exist."""
     mapping = {
         "mappings": {
             "properties": {
@@ -110,7 +90,6 @@ def create_index(es, index_name: str = FRAMESET_GEOMETRY_INDEX):
 
 
 def create_group_index(es, index_name: str = BIKE_PRODUCT_INDEX):
-    """Creates the group index with appropriate mapping."""
     mapping = {
         "mappings": {
             "properties": {
@@ -143,7 +122,6 @@ def create_group_index(es, index_name: str = BIKE_PRODUCT_INDEX):
 
 
 def populate_index(es, session):
-    """Fetches all bikes from DB and pushes them to both ES indices."""
     logger.info("🔍 Fetching bike products from PostgreSQL...")
 
     stmt = select(BikeProductORM).options(
@@ -161,20 +139,16 @@ def populate_index(es, session):
             groups[key] = []
         groups[key].append(p)
 
-    # Prepare Generator for Bulk Indexing
     def actions_generator():
-        # Individual products
         for product in products:
             doc = serialize_bike(product)
             doc["_index"] = FRAMESET_GEOMETRY_INDEX
             yield doc
-        # Groups
         for key, group_products in groups.items():
             doc = serialize_group(key, group_products)
             doc["_index"] = BIKE_PRODUCT_INDEX
             yield doc
 
-    # Execute Bulk Index
     logger.info("🚀 Pushing to Elasticsearch...")
     success, failed = helpers.bulk(es, actions_generator(), stats_only=True)
 
@@ -192,19 +166,16 @@ def main():
 
     args = parser.parse_args()
 
-    # 1. Connect to DB and ES
     es = Elasticsearch(args.url)
 
     if not es.ping():
         logger.error(f"❌ Could not connect to Elasticsearch at {args.url}!")
         return
 
-    # 2. Reset Indices
     if args.recreate:
         create_index(es, FRAMESET_GEOMETRY_INDEX)
         create_group_index(es, BIKE_PRODUCT_INDEX)
 
-    # 3. Fetch Data and Populate
     with SessionLocal() as session:
         populate_index(es, session)
 
