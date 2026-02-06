@@ -152,6 +152,24 @@ def _extract_meta(soup: BeautifulSoup) -> KrossBikeMeta:
             elif c:
                 meta_data["categories"].append(c)
 
+    if not meta_data["categories"]:
+        # Fallback to standard breadcrumbs: breadcrumbs > ul > li
+        # Look for li with class containing "category" and a number
+        breadcrumbs_fallback = soup.find("div", class_="breadcrumbs")
+        if breadcrumbs_fallback:
+            for li in breadcrumbs_fallback.find_all("li"):
+                classes = li.get("class", [])
+                if isinstance(classes, str):
+                    classes = [classes]
+
+                has_category_class = any(
+                    c.startswith("category") and any(char.isdigit() for char in c) for c in classes
+                )
+                if has_category_class:
+                    cat_text = li.get_text(strip=True)
+                    if cat_text:
+                        meta_data["categories"].append(cat_text)
+
     # Colors from product-item-colors
     related_colors_div = soup.find("div", class_="product-related-colors")
     if related_colors_div:
@@ -217,7 +235,7 @@ def extract_bike_data(html: str) -> ExtractedBikeData | None:
     """
     # Use SoupStrainer to only parse the parts of the document we care about
     # This significantly speeds up BeautifulSoup parsing
-    strainer = SoupStrainer(["meta", "div", "table"])
+    strainer = SoupStrainer(["meta", "div", "table", "ul", "li", "a"])
     try:
         soup = BeautifulSoup(html, "lxml", parse_only=strainer)
     except Exception:

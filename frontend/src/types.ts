@@ -66,3 +66,8 @@ export interface SearchResult {
   total: number;
   items: BikeProduct[];
 }
+
+export interface GroupedSearchResult {
+  total: number;
+  items: BikeGroup[];
+}

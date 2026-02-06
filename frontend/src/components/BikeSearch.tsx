@@ -7,6 +7,7 @@ import {
   BikeGroup,
   BikeProduct,
   SearchResult,
+  GroupedSearchResult,
   BikeCategory,
   MaterialGroup,
 } from "@/types";
@@ -21,7 +22,11 @@ export default function BikeSearch() {
   const [reach, setReach] = useState("");
   const [category, setCategory] = useState("");
   const [material, setMaterial] = useState("");
-  const [results, setResults] = useState<BikeProduct[]>([]);
+  const [query, setQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<"geometry" | "keyword">(
+    "geometry",
+  );
+  const [results, setResults] = useState<BikeProduct[] | BikeGroup[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -29,7 +34,10 @@ export default function BikeSearch() {
     Record<string, number>
   >({});
 
-  const canSearch = Boolean(stack && reach);
+  const canSearch =
+    activeTab === "geometry"
+      ? Boolean(stack && reach)
+      : Boolean(query.trim() || category || material);
 
   const searchBikes = useCallback(async () => {
     setLoading(true);
@@ -37,12 +45,21 @@ export default function BikeSearch() {
       const params = new URLSearchParams();
 
       if (category) params.append("category", category);
-      if (stack) params.append("stack", stack);
-      if (reach) params.append("reach", reach);
       if (material) params.append("material", material);
 
+      // Pagination first to ensure it's included in the URL below
       params.append("page", page.toString());
       params.append("size", "10");
+
+      let url = "";
+      if (activeTab === "geometry") {
+        if (stack) params.append("stack", stack);
+        if (reach) params.append("reach", reach);
+        url = `http://localhost:8000/api/bikes/search/geometry?${params.toString()}`;
+      } else {
+        if (query.trim()) params.append("q", query.trim());
+        url = `http://localhost:8000/api/bikes/search/keyword?${params.toString()}`;
+      }
 
       if (!canSearch) {
         setResults([]);
@@ -50,16 +67,30 @@ export default function BikeSearch() {
         return;
       }
 
-      const url = `http://localhost:8000/api/bikes/search?${params.toString()}`;
-
       const res = await fetch(url);
       if (!res.ok) {
         throw new Error(`Search failed with status: ${res.status}`);
       }
-      const data = (await res.json()) as SearchResult;
 
-      setResults(data.items || []);
-      setTotal(data.total || 0);
+      if (activeTab === "geometry") {
+        const data = (await res.json()) as SearchResult;
+        setResults(data.items || []);
+        setTotal(data.total || 0);
+      } else {
+        const data = (await res.json()) as GroupedSearchResult;
+        setResults(data.items || []);
+        setTotal(data.total || 0);
+
+        // Initialize size selection for groups
+        const initialSelection: Record<string, number> = {};
+        data.items?.forEach((group) => {
+          const groupKey = `${group.frameset_name}-${group.build_kit.id}`;
+          if (group.products.length > 0) {
+            initialSelection[groupKey] = group.products[0].id;
+          }
+        });
+        setSelectedProductIds((prev) => ({ ...prev, ...initialSelection }));
+      }
     } catch (err) {
       console.error("Failed to fetch bikes:", err);
       setResults([]);
@@ -67,7 +98,7 @@ export default function BikeSearch() {
     } finally {
       setLoading(false);
     }
-  }, [category, reach, stack, page, material, canSearch]);
+  }, [category, reach, stack, query, page, material, canSearch, activeTab]);
 
   useEffect(() => {
     // Only fetch if search criteria are met
@@ -158,10 +189,70 @@ export default function BikeSearch() {
         </div>
       </div>
 
+      <div className="flex p-1 bg-gray-100 rounded-2xl w-fit mx-auto md:mx-0">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab("geometry");
+            setPage(1);
+          }}
+          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${
+            activeTab === "geometry"
+              ? "bg-white text-blue-600 shadow-sm"
+              : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          {t.ui.geometry_tab}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab("keyword");
+            setPage(1);
+          }}
+          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${
+            activeTab === "keyword"
+              ? "bg-white text-blue-600 shadow-sm"
+              : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          {t.ui.keyword_tab}
+        </button>
+      </div>
+
       <form
         onSubmit={handleSearch}
         className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-white p-5 rounded-2xl border border-gray-200 shadow-sm"
       >
+        {activeTab === "keyword" && (
+          <div className="col-span-2 space-y-1.5">
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">
+              {t.ui.brand} / {t.ui.model}
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t.ui.search_placeholder}
+                className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all"
+              />
+              <svg
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            </div>
+          </div>
+        )}
         <div className="space-y-1.5">
           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">
             {t.ui.category}
@@ -196,42 +287,47 @@ export default function BikeSearch() {
             ))}
           </select>
         </div>
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">
-            {t.ui.stack_target}
-          </label>
-          <div className="relative">
-            <input
-              type="number"
-              value={stack}
-              onChange={(e) => setStack(e.target.value)}
-              placeholder="e.g. 580"
-              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all"
-              required
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 uppercase">
-              mm
-            </span>
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">
-            {t.ui.reach_target}
-          </label>
-          <div className="relative">
-            <input
-              type="number"
-              value={reach}
-              onChange={(e) => setReach(e.target.value)}
-              placeholder="e.g. 400"
-              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all"
-              required
-            />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 uppercase">
-              mm
-            </span>
-          </div>
-        </div>
+
+        {activeTab === "geometry" && (
+          <>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">
+                {t.ui.stack_target}
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={stack}
+                  onChange={(e) => setStack(e.target.value)}
+                  placeholder="e.g. 580"
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all"
+                  required
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 uppercase">
+                  mm
+                </span>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">
+                {t.ui.reach_target}
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={reach}
+                  onChange={(e) => setReach(e.target.value)}
+                  placeholder="e.g. 400"
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all"
+                  required
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 uppercase">
+                  mm
+                </span>
+              </div>
+            </div>
+          </>
+        )}
       </form>
 
       {total > 10 && (
@@ -288,35 +384,49 @@ export default function BikeSearch() {
       ) : (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-100 table-fixed">
+            <table className="min-w-full divide-y divide-gray-200 table-fixed">
               <thead className="bg-gray-50/50">
                 <tr>
-                  <th className="w-1/3 px-6 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">
+                  <th className="w-[32%] px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                     {t.ui.brand} / {t.ui.model}
                   </th>
-                  <th className="w-20 px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">
+                  <th className="w-[12%] px-4 py-4 text-center text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                     {t.geometry.size_label}
                   </th>
-                  <th className="w-32 px-6 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">
+                  <th className="w-[16%] px-4 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                     Geometry (S/R)
                   </th>
-                  <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">
-                    Target Fit
-                  </th>
-                  <th className="w-40 px-6 py-4 text-right text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">
-                    Actions
+                  {activeTab === "geometry" && (
+                    <th className="w-[25%] px-6 py-4 text-center text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                      Target Fit
+                    </th>
+                  )}
+                  <th className="w-[15%] px-6 py-4 text-right text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    {t.ui.actions || "Actions"}
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
-                {results.map((product) => {
+                {results.map((item) => {
+                  const isGroup = "products" in item;
+                  const groupKey = isGroup
+                    ? `${item.frameset_name}-${item.build_kit.id}`
+                    : "";
+                  const selectedId = isGroup
+                    ? selectedProductIds[groupKey] || item.products[0]?.id
+                    : (item as BikeProduct).id;
+                  const product = isGroup
+                    ? item.products.find((p) => p.id === selectedId) ||
+                      item.products[0]
+                    : (item as BikeProduct);
+
+                  if (!product) return null;
+
                   const isProductInComparison = isInComparison(product.id);
                   const sDiff = product.frameset.stack - Number(stack);
                   const rDiff = product.frameset.reach - Number(reach);
 
                   // Visualization range based on average size differences
-                  // avg_stack_diff ~10mm, avg_reach_diff ~11mm
-                  // Let's use 30mm as a standard range for the bar to show +/- 30mm
                   const RANGE = 20;
                   const getPosition = (diff: number) => {
                     const percent = ((diff + RANGE) / (RANGE * 2)) * 100;
@@ -343,7 +453,7 @@ export default function BikeSearch() {
 
                   return (
                     <tr
-                      key={product.id}
+                      key={isGroup ? groupKey : product.id}
                       className="group hover:bg-blue-50/40 transition-all duration-200"
                     >
                       <td className="px-6 py-5">
@@ -373,137 +483,183 @@ export default function BikeSearch() {
                         </div>
                       </td>
                       <td className="px-6 py-5 text-center">
-                        <span className="inline-flex items-center justify-center min-w-[32px] px-2 py-1 text-[11px] font-black rounded-lg bg-gray-900 text-white shadow-sm">
-                          {product.frameset.size_label}
-                        </span>
-                      </td>
-                      <td className="px-6 py-5 whitespace-nowrap">
-                        <div className="grid grid-cols-[12px_1fr_20px] items-center gap-x-2 gap-y-1">
-                          <span className="text-[10px] font-black text-gray-300">
-                            S
-                          </span>
-                          <span className="text-sm font-bold text-gray-700 tabular-nums">
-                            {product.frameset.stack}
-                          </span>
-                          <span className="text-[10px] text-gray-400 font-medium">
-                            mm
-                          </span>
-
-                          <span className="text-[10px] font-black text-gray-300">
-                            R
-                          </span>
-                          <span className="text-sm font-bold text-gray-700 tabular-nums">
-                            {product.frameset.reach}
-                          </span>
-                          <span className="text-[10px] text-gray-400 font-medium">
-                            mm
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        {canSearch && (
-                          <div className="flex flex-col gap-4 max-w-[180px] mx-auto">
-                            {/* Stack Fit */}
-                            <div className="space-y-1.5">
-                              <div className="flex items-end text-[9px] font-black uppercase tracking-widest relative h-3">
-                                <span className="text-gray-400">Stack</span>
-                                <span
-                                  className={`absolute left-1/2 -translate-x-1/2 text-[10px] tabular-nums ${getFitColor(
-                                    sDiff,
-                                  )}`}
-                                >
-                                  {sDiff > 0 ? "+" : ""}
-                                  {sDiff.toFixed(1)}mm
-                                </span>
-                                <span
-                                  className={`ml-auto ${getFitColor(sDiff)}`}
-                                >
-                                  {getFitLabel(sDiff)}
-                                </span>
-                              </div>
-                              <div className="relative py-2">
-                                <div className="relative h-1.5 bg-gray-100 rounded-full overflow-hidden border border-gray-200/50">
-                                  <div
-                                    className="absolute inset-0"
-                                    style={{
-                                      background:
-                                        "linear-gradient(to right, #ef4444 0%, #f59e0b 25%, #22c55e 37.5%, #3b82f6 45%, #a855f7 50%, #3b82f6 55%, #22c55e 62.5%, #f59e0b 75%, #ef4444 100%)",
-                                    }}
-                                  />
-                                  <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/40 z-10" />
-                                </div>
-                                <div
-                                  className="absolute top-1/2 w-0.5 h-4 bg-gray-950 z-20 transition-all duration-700 ease-out rounded-full"
-                                  style={{
-                                    left: `${getPosition(sDiff)}%`,
-                                    transform: "translate(-50%, -50%)",
-                                  }}
-                                />
-                              </div>
-                              <div className="flex justify-between px-0.5">
-                                <span className="text-[8px] font-bold text-gray-300">
-                                  -20
-                                </span>
-                                <span className="text-[8px] font-bold text-gray-300">
-                                  0
-                                </span>
-                                <span className="text-[8px] font-bold text-gray-300">
-                                  +20
-                                </span>
-                              </div>
-                            </div>
-                            {/* Reach Fit */}
-                            <div className="space-y-1.5">
-                              <div className="flex items-end text-[9px] font-black uppercase tracking-widest relative h-3">
-                                <span className="text-gray-400">Reach</span>
-                                <span
-                                  className={`absolute left-1/2 -translate-x-1/2 text-[10px] tabular-nums ${getFitColor(
-                                    rDiff,
-                                  )}`}
-                                >
-                                  {rDiff > 0 ? "+" : ""}
-                                  {rDiff.toFixed(1)}mm
-                                </span>
-                                <span
-                                  className={`ml-auto ${getFitColor(rDiff)}`}
-                                >
-                                  {getFitLabel(rDiff)}
-                                </span>
-                              </div>
-                              <div className="relative py-2">
-                                <div className="relative h-1.5 bg-gray-100 rounded-full overflow-hidden border border-gray-200/50">
-                                  <div
-                                    className="absolute inset-0"
-                                    style={{
-                                      background:
-                                        "linear-gradient(to right, #ef4444 0%, #f59e0b 25%, #22c55e 37.5%, #3b82f6 45%, #a855f7 50%, #3b82f6 55%, #22c55e 62.5%, #f59e0b 75%, #ef4444 100%)",
-                                    }}
-                                  />
-                                  <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/40 z-10" />
-                                </div>
-                                <div
-                                  className="absolute top-1/2 w-0.5 h-4 bg-gray-950 z-20 transition-all duration-700 ease-out rounded-full"
-                                  style={{
-                                    left: `${getPosition(rDiff)}%`,
-                                    transform: "translate(-50%, -50%)",
-                                  }}
-                                />
-                              </div>
-                              <div className="flex justify-between px-0.5">
-                                <span className="text-[8px] font-bold text-gray-300">
-                                  -20
-                                </span>
-                                <span className="text-[8px] font-bold text-gray-300">
-                                  0
-                                </span>
-                                <span className="text-[8px] font-bold text-gray-300">
-                                  +20
-                                </span>
-                              </div>
-                            </div>
+                        {isGroup ? (
+                          <div className="flex flex-wrap justify-center gap-1.5">
+                            {(item as BikeGroup).products.map((p) => (
+                              <button
+                                key={p.id}
+                                onClick={() =>
+                                  setSelectedProductIds((prev) => ({
+                                    ...prev,
+                                    [groupKey]: p.id,
+                                  }))
+                                }
+                                className={`min-w-[32px] px-1.5 py-0.5 text-[10px] font-bold rounded-md transition-all ${
+                                  selectedId === p.id
+                                    ? "bg-blue-600 text-white shadow-sm ring-2 ring-blue-600/20 scale-105"
+                                    : "bg-gray-50 text-gray-500 hover:bg-gray-200 hover:text-gray-700 border border-gray-200"
+                                }`}
+                              >
+                                {p.frameset.size_label}
+                              </button>
+                            ))}
                           </div>
+                        ) : (
+                          <span className="inline-flex items-center justify-center min-w-[32px] px-2 py-1 text-[11px] font-black rounded-lg bg-gray-900 text-white shadow-sm">
+                            {product.frameset.size_label}
+                          </span>
                         )}
                       </td>
+                      <td className="px-6 py-5 whitespace-nowrap">
+                        <div className="flex flex-col gap-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 text-[10px] font-black text-gray-300">
+                              S
+                            </span>
+                            <span className="text-sm font-bold text-gray-800 tabular-nums">
+                              {product.frameset.stack}
+                            </span>
+                            <span className="text-[10px] text-gray-400 font-medium">
+                              mm
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 text-[10px] font-black text-gray-300">
+                              R
+                            </span>
+                            <span className="text-sm font-bold text-gray-800 tabular-nums">
+                              {product.frameset.reach}
+                            </span>
+                            <span className="text-[10px] text-gray-400 font-medium">
+                              mm
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      {activeTab === "geometry" && (
+                        <td className="px-6 py-5">
+                          {canSearch && (
+                            <div className="flex flex-col gap-4 max-w-[180px] mx-auto">
+                              {/* Stack Fit */}
+                              <div className="space-y-1.5">
+                                <div className="flex items-end justify-between relative h-4">
+                                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                                    Stack
+                                  </span>
+                                  <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
+                                    <span
+                                      className={`text-[11px] font-bold tabular-nums leading-none ${getFitColor(
+                                        sDiff,
+                                      )}`}
+                                    >
+                                      {sDiff > 0 ? "+" : ""}
+                                      {sDiff.toFixed(1)}
+                                    </span>
+                                    <span className="text-[7px] text-gray-400 font-bold uppercase">
+                                      mm
+                                    </span>
+                                  </div>
+                                  <span
+                                    className={`text-[9px] font-black uppercase tracking-wider ${getFitColor(
+                                      sDiff,
+                                    )}`}
+                                  >
+                                    {getFitLabel(sDiff)}
+                                  </span>
+                                </div>
+                                <div className="relative py-1">
+                                  <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden border border-gray-200/50 shadow-inner">
+                                    <div
+                                      className="absolute inset-0"
+                                      style={{
+                                        background:
+                                          "linear-gradient(to right, #ef4444 0%, #f59e0b 25%, #22c55e 37.5%, #3b82f6 45%, #a855f7 50%, #3b82f6 55%, #22c55e 62.5%, #f59e0b 75%, #ef4444 100%)",
+                                      }}
+                                    />
+                                    <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/40 z-10" />
+                                  </div>
+                                  <div
+                                    className="absolute top-1/2 w-0.5 h-4 bg-gray-950 z-20 transition-all duration-700 ease-out rounded-full shadow-[0_0_2px_rgba(255,255,255,0.8)]"
+                                    style={{
+                                      left: `${getPosition(sDiff)}%`,
+                                      transform: "translate(-50%, -50%)",
+                                    }}
+                                  />
+                                </div>
+                                <div className="flex justify-between px-0.5">
+                                  <span className="text-[8px] font-bold text-gray-300 tracking-tighter">
+                                    -20
+                                  </span>
+                                  <span className="text-[8px] font-bold text-gray-400">
+                                    0
+                                  </span>
+                                  <span className="text-[8px] font-bold text-gray-300 tracking-tighter">
+                                    +20
+                                  </span>
+                                </div>
+                              </div>
+                              {/* Reach Fit */}
+                              <div className="space-y-1.5">
+                                <div className="flex items-end justify-between relative h-4">
+                                  <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                                    Reach
+                                  </span>
+                                  <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
+                                    <span
+                                      className={`text-[11px] font-bold tabular-nums leading-none ${getFitColor(
+                                        rDiff,
+                                      )}`}
+                                    >
+                                      {rDiff > 0 ? "+" : ""}
+                                      {rDiff.toFixed(1)}
+                                    </span>
+                                    <span className="text-[7px] text-gray-400 font-bold uppercase">
+                                      mm
+                                    </span>
+                                  </div>
+                                  <span
+                                    className={`text-[9px] font-black uppercase tracking-wider ${getFitColor(
+                                      rDiff,
+                                    )}`}
+                                  >
+                                    {getFitLabel(rDiff)}
+                                  </span>
+                                </div>
+                                <div className="relative py-1">
+                                  <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden border border-gray-200/50 shadow-inner">
+                                    <div
+                                      className="absolute inset-0"
+                                      style={{
+                                        background:
+                                          "linear-gradient(to right, #ef4444 0%, #f59e0b 25%, #22c55e 37.5%, #3b82f6 45%, #a855f7 50%, #3b82f6 55%, #22c55e 62.5%, #f59e0b 75%, #ef4444 100%)",
+                                      }}
+                                    />
+                                    <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/40 z-10" />
+                                  </div>
+                                  <div
+                                    className="absolute top-1/2 w-0.5 h-4 bg-gray-950 z-20 transition-all duration-700 ease-out rounded-full shadow-[0_0_2px_rgba(255,255,255,0.8)]"
+                                    style={{
+                                      left: `${getPosition(rDiff)}%`,
+                                      transform: "translate(-50%, -50%)",
+                                    }}
+                                  />
+                                </div>
+                                <div className="flex justify-between px-0.5">
+                                  <span className="text-[8px] font-bold text-gray-300 tracking-tighter">
+                                    -20
+                                  </span>
+                                  <span className="text-[8px] font-bold text-gray-400">
+                                    0
+                                  </span>
+                                  <span className="text-[8px] font-bold text-gray-300 tracking-tighter">
+                                    +20
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </td>
+                      )}
                       <td className="px-6 py-5 text-right">
                         <div className="flex justify-end items-center gap-2">
                           <button

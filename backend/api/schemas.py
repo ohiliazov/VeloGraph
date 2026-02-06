@@ -112,3 +112,8 @@ class BuildKitCreateSchema(BaseModel):
 class SearchResult(BaseModel):
     total: int
     items: list[BikeProductSchema]
+
+
+class GroupedSearchResult(BaseModel):
+    total: int
+    items: list[BikeGroupSchema]
