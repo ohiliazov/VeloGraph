@@ -18,6 +18,7 @@ from backend.api.schemas import (
     MaterialGroup,
     SearchResult,
 )
+from backend.core.constants import BIKE_PRODUCT_INDEX, FRAMESET_GEOMETRY_INDEX
 from backend.core.db import get_db
 from backend.core.elasticsearch import get_es_client
 from backend.core.models import BikeProductORM, BuildKitORM, FramesetORM
@@ -111,7 +112,7 @@ async def search_geometry(
     query = {"bool": {"filter": filters}}
     from_ = (page - 1) * size
 
-    resp = await es.search(index="bike_products", query=query, sort=sort, from_=from_, size=size)
+    resp = await es.search(index=FRAMESET_GEOMETRY_INDEX, query=query, sort=sort, from_=from_, size=size)
     total = resp["hits"]["total"]["value"]
     product_ids = [hit["_source"]["id"] for hit in resp["hits"]["hits"]]
 
@@ -145,9 +146,9 @@ async def search_keyword(
 ):
     filters = []
     if category:
-        filters.append({"term": {"frameset.category": category.value}})
+        filters.append({"term": {"category": category.value}})
     if material:
-        filters.append({"term": {"frameset.material_group": material.value}})
+        filters.append({"term": {"material_group": material.value}})
 
     must = []
     if q:
@@ -155,7 +156,7 @@ async def search_keyword(
             {
                 "multi_match": {
                     "query": q,
-                    "fields": ["frameset.name^3", "sku", "build_kit.name", "build_kit.groupset"],
+                    "fields": ["frameset_name^3", "skus", "build_kit.name", "build_kit.groupset"],
                     "fuzziness": "AUTO",
                 }
             }
@@ -165,31 +166,41 @@ async def search_keyword(
     if q:
         sort.append("_score")
     else:
-        sort.append({"frameset.name.keyword": "asc"})
+        sort.append({"frameset_name.keyword": "asc"})
 
     query = {"bool": {"must": must, "filter": filters}}
     from_ = (page - 1) * size
 
-    resp = await es.search(index="bike_products", query=query, sort=sort, from_=from_, size=size)
+    resp = await es.search(index=BIKE_PRODUCT_INDEX, query=query, sort=sort, from_=from_, size=size)
     total = resp["hits"]["total"]["value"]
-    product_ids = [hit["_source"]["id"] for hit in resp["hits"]["hits"]]
 
-    if not product_ids:
-        return {"total": total, "items": []}
+    group_items = []
+    for hit in resp["hits"]["hits"]:
+        source = hit["_source"]
+        product_ids = source["product_ids"]
 
-    stmt = (
-        select(BikeProductORM)
-        .where(BikeProductORM.id.in_(product_ids))
-        .options(
-            selectinload(BikeProductORM.frameset),
-            selectinload(BikeProductORM.build_kit),
+        stmt = (
+            select(BikeProductORM)
+            .where(BikeProductORM.id.in_(product_ids))
+            .options(
+                selectinload(BikeProductORM.frameset),
+                selectinload(BikeProductORM.build_kit),
+            )
         )
-    )
-    products = cast(list[BikeProductORM], db.scalars(stmt).all())
+        products = cast(list[BikeProductORM], db.scalars(stmt).all())
+        products.sort(key=lambda x: x.frameset.stack)
 
-    grouped = _group_products(products)
+        if products:
+            group_items.append(
+                {
+                    "frameset_name": source["frameset_name"],
+                    "material": source["material"],
+                    "build_kit": products[0].build_kit,
+                    "products": products,
+                }
+            )
 
-    return {"total": total, "items": grouped}
+    return {"total": total, "items": group_items}
 
 
 @router.get("/{product_id}", response_model=BikeGroupSchema)
@@ -257,12 +268,13 @@ async def create_bike_product(
     product = db.scalar(stmt)
 
     # Sync to Elasticsearch
-    await sync_product_to_es(product, es)
+    await sync_product_to_es(product, es, db)
 
     return product
 
 
-async def sync_product_to_es(product: BikeProductORM, es: AsyncElasticsearch):
+async def sync_product_to_es(product: BikeProductORM, es: AsyncElasticsearch, db: Session):
+    # 1. Update individual product index
     es_doc = {
         "id": product.id,
         "sku": product.sku,
@@ -283,7 +295,46 @@ async def sync_product_to_es(product: BikeProductORM, es: AsyncElasticsearch):
             "wheelset": product.build_kit.wheelset,
         },
     }
-    await es.index(index="bike_products", id=str(product.id), document=es_doc, refresh=True)
+    await es.index(index=FRAMESET_GEOMETRY_INDEX, id=str(product.id), document=es_doc, refresh=True)
+
+    # 2. Update group index
+    # Find all products in the same group to rebuild the group document
+    sibling_stmt = (
+        select(BikeProductORM)
+        .where(
+            BikeProductORM.frameset_id.in_(
+                select(FramesetORM.id).where(
+                    FramesetORM.name == product.frameset.name,
+                    FramesetORM.material == product.frameset.material,
+                )
+            ),
+            BikeProductORM.build_kit_id == product.build_kit_id,
+        )
+        .options(
+            selectinload(BikeProductORM.frameset),
+            selectinload(BikeProductORM.build_kit),
+        )
+    )
+    siblings = list(db.scalars(sibling_stmt).all())
+
+    group_id = f"{product.frameset.name}-{product.frameset.material}-{product.build_kit_id}".replace(" ", "-").lower()
+    group_doc = {
+        "frameset_name": product.frameset.name,
+        "material": product.frameset.material,
+        "material_group": get_material_group(product.frameset.material),
+        "category": product.frameset.category,
+        "build_kit": {
+            "name": product.build_kit.name,
+            "groupset": product.build_kit.groupset,
+            "wheelset": product.build_kit.wheelset,
+            "cockpit": product.build_kit.cockpit,
+            "tires": product.build_kit.tires,
+        },
+        "skus": [p.sku for p in siblings],
+        "product_ids": [p.id for p in siblings],
+        "sizes": [p.frameset.size_label for p in siblings],
+    }
+    await es.index(index=BIKE_PRODUCT_INDEX, id=group_id, document=group_doc, refresh=True)
 
 
 @router.delete("/{product_id}")
@@ -300,7 +351,50 @@ async def delete_bike_product(
     db.delete(product)
     db.commit()
 
-    # Remove from Elasticsearch
-    await es.delete(index="bike_products", id=str(product_id), ignore=[404], refresh=True)
+    # 1. Remove from Elasticsearch product index
+    await es.delete(index=FRAMESET_GEOMETRY_INDEX, id=str(product_id), ignore=[404], refresh=True)
+
+    # 2. Update or remove from group index
+    group_id = f"{product.frameset.name}-{product.frameset.material}-{product.build_kit_id}".replace(" ", "-").lower()
+
+    # Check if there are remaining products in this group
+    sibling_stmt = (
+        select(BikeProductORM)
+        .where(
+            BikeProductORM.frameset_id.in_(
+                select(FramesetORM.id).where(
+                    FramesetORM.name == product.frameset.name,
+                    FramesetORM.material == product.frameset.material,
+                )
+            ),
+            BikeProductORM.build_kit_id == product.build_kit_id,
+        )
+        .options(
+            selectinload(BikeProductORM.frameset),
+            selectinload(BikeProductORM.build_kit),
+        )
+    )
+    siblings = list(db.scalars(sibling_stmt).all())
+
+    if not siblings:
+        await es.delete(index=BIKE_PRODUCT_INDEX, id=group_id, ignore=[404], refresh=True)
+    else:
+        group_doc = {
+            "frameset_name": product.frameset.name,
+            "material": product.frameset.material,
+            "material_group": get_material_group(product.frameset.material),
+            "category": product.frameset.category,
+            "build_kit": {
+                "name": product.build_kit.name,
+                "groupset": product.build_kit.groupset,
+                "wheelset": product.build_kit.wheelset,
+                "cockpit": product.build_kit.cockpit,
+                "tires": product.build_kit.tires,
+            },
+            "skus": [p.sku for p in siblings],
+            "product_ids": [p.id for p in siblings],
+            "sizes": [p.frameset.size_label for p in siblings],
+        }
+        await es.index(index=BIKE_PRODUCT_INDEX, id=group_id, document=group_doc, refresh=True)
 
     return {"detail": "Bike product deleted"}
