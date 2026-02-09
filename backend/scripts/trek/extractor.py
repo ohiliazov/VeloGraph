@@ -8,7 +8,7 @@ from typing import Any, ClassVar
 from bs4 import BeautifulSoup, SoupStrainer, Tag
 from loguru import logger
 
-from backend.scripts.base_extractor import BaseBikeExtractor, BikeMeta, ExtractedBikeData
+from backend.scripts.base import BaseBikeExtractor, BikeMeta, ExtractedBikeData
 from backend.scripts.constants import artifacts_dir
 
 

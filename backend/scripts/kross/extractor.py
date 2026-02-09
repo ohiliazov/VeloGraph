@@ -4,7 +4,7 @@ from typing import Any, ClassVar
 
 from bs4 import BeautifulSoup, SoupStrainer, Tag
 
-from backend.scripts.base_extractor import BaseBikeExtractor, BikeMeta, ColorVariant, ExtractedBikeData
+from backend.scripts.base import BaseBikeExtractor, BikeMeta, ColorVariant, ExtractedBikeData
 from backend.scripts.constants import artifacts_dir
 
 
