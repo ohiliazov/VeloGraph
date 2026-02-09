@@ -10,8 +10,8 @@ START_URL = "https://kross.pl/rowery"
 
 
 class KrossBikeCrawler(BaseBikeCrawler):
-    def __init__(self):
-        super().__init__(brand_name="kross", artifacts_dir=artifacts_dir, start_url=START_URL)
+    def __init__(self, archive: bool = False):
+        super().__init__(brand_name="kross", artifacts_dir=artifacts_dir, start_url=START_URL, archive=archive)
 
     def get_slug_from_url(self, url: str) -> str:
         return url.rstrip("/").split("/")[-1]
@@ -63,5 +63,7 @@ class KrossBikeCrawler(BaseBikeCrawler):
 
 
 if __name__ == "__main__":
-    crawler = KrossBikeCrawler()
-    crawler.run()
+    parser = KrossBikeCrawler.get_base_parser("kross")
+    args = parser.parse_args()
+    crawler = KrossBikeCrawler(archive=args.archive)
+    crawler.run(args)

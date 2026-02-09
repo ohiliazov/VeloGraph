@@ -35,19 +35,18 @@ class TrekBikeExtractor(BaseBikeExtractor):
         return "Trek"
 
     def _parse_model(self, parser: LexborHTMLParser) -> str:
-        # 1) Try JSON-LD Product data first
+        # 1) Try JSON-LD Product data first (usually contains the most concrete model name)
         def _try_from_ld(obj: Any) -> str | None:
             try:
                 if isinstance(obj, dict):
                     t = str(obj.get("@type") or obj.get("type") or "").lower()
                     if t in {"product", "productmodel", "bike", "bicycle"} and obj.get("name"):
                         return str(obj.get("name")).strip()
-                    # Some pages put data in @graph
                     if "@graph" in obj and isinstance(obj["@graph"], list):
                         for it in obj["@graph"]:
-                            name = _try_from_ld(it)
-                            if name:
-                                return name
+                            res = _try_from_ld(it)
+                            if res:
+                                return res
             except Exception:
                 pass
             return None
@@ -55,49 +54,48 @@ class TrekBikeExtractor(BaseBikeExtractor):
         for sc in parser.css('script[type="application/ld+json"]'):
             try:
                 data = json.loads(sc.text())
+                res = (
+                    _try_from_ld(data)
+                    if not isinstance(data, list)
+                    else next((_try_from_ld(it) for it in data if _try_from_ld(it)), None)
+                )
+                if res:
+                    return html.unescape(res)
             except Exception:
                 continue
-            if isinstance(data, list):
-                for it in data:
-                    name = _try_from_ld(it)
-                    if name:
-                        return html.unescape(name)
-            else:
-                name = _try_from_ld(data)
-                if name:
-                    return html.unescape(name)
 
         # 2) H1 product title candidates (PDP pages)
-        h1_candidates = [
-            'h1[qaid="pdp-product-title"]',
-            "h1.product-title",
-            "h1.product-name",
-            "h1.pdp__title",
-            "h1.page-title",
-            "h1",
-        ]
-        for sel in h1_candidates:
+        # Prioritize specific qaid if available
+        node = parser.css_first('h1[qaid="pdp-product-title"]')
+        if node:
+            txt = node.text(strip=True)
+            if txt:
+                return html.unescape(txt)
+
+        # 3) Check for generic frameset name in URL as a fallback or component
+        # e.g. /.../madone/madone-sl/madone-sl-7-gen-8/p/57664/
+        source_url = self._parse_source_url(parser)
+        if source_url:
+            path_parts = source_url.split("?")[0].rstrip("/").split("/")
+            if len(path_parts) >= 3 and path_parts[-2] == "p":
+                model_slug = path_parts[-3]
+                return model_slug.replace("-", " ").title()
+
+        # 4) Fallback to other H1s
+        for sel in ["h1.product-title", "h1.product-name", "h1.pdp__title", "h1.page-title", "h1"]:
             node = parser.css_first(sel)
             if node:
                 txt = node.text(strip=True)
-                if txt:
+                if txt and txt.lower() not in {"menu", "koszyk"}:
                     return html.unescape(txt)
 
-        # 3) Breadcrumb last item as a fallback (skip generic nodes)
+        # 5) Breadcrumb last item
         crumbs = parser.css('nav[aria-label="Breadcrumb"] a, .breadcrumb a')
         if crumbs:
             last = crumbs[-1].text(strip=True)
             if last and last.lower() not in {"home", "rowery", "sklep"}:
                 return html.unescape(last)
 
-        # 4) Last resort: use og:title only if it looks like a product, and trim brand suffix
-        title_tag = parser.css_first('meta[property="og:title"]')
-        if title_tag:
-            title = title_tag.attributes.get("content", "").strip()
-            # Avoid obvious collection/listing titles
-            if not re.search(r"kolekcj|overview|model overview", title, flags=re.IGNORECASE):
-                cleaned = re.sub(r"\s*-\s*Trek Bikes.*", "", title, flags=re.IGNORECASE)
-                return html.unescape(cleaned)
         return ""
 
     def _parse_source_url(self, parser: LexborHTMLParser) -> str:
@@ -145,12 +143,36 @@ class TrekBikeExtractor(BaseBikeExtractor):
         return None
 
     def _parse_material(self, parser: LexborHTMLParser) -> str | None:
-        # Trek product pages often lazy-load specs; default to None here.
+        # Trek specs are in dt/dd pairs. Look for "Rama" (Frame)
+        dts = parser.css("dt.details-list__title")
+        for dt in dts:
+            if "Rama" in dt.text():
+                dd = dt.next
+                while dd and dd.tag != "dd":
+                    dd = dd.next
+                if dd:
+                    return dd.text(strip=True)
         return None
 
     def _parse_colors(self, parser: LexborHTMLParser) -> list[ColorVariant]:
-        # Trek color variants are complex and often dynamic; default to []
-        return []
+        out: list[ColorVariant] = []
+        # Use div with class attribute-color as requested
+        attr_color_div = parser.css_first("div.attribute-color")
+        if attr_color_div:
+            # The selected color name is often in .variantName
+            variant_name_node = attr_color_div.css_first(".variantName")
+            if variant_name_node:
+                color_text = variant_name_node.text(strip=True)
+                # Format is usually "Kolor/Color Name"
+                if "/" in color_text:
+                    color_name = color_text.split("/", 1)[1].strip()
+                else:
+                    color_name = color_text.replace("Kolor", "").strip()
+                if color_name:
+                    # Record current color. We don't have URLs for other variants here,
+                    # but capturing the current one is better than nothing.
+                    out.append(ColorVariant(html_path="", color=color_name, url=""))
+        return out
 
     def _extract_meta(self, parser: LexborHTMLParser) -> BikeMeta:
         return BikeMeta(
@@ -162,6 +184,7 @@ class TrekBikeExtractor(BaseBikeExtractor):
             max_tire_width=self._parse_max_tire_width(parser),
             material=self._parse_material(parser),
             source_url=self._parse_source_url(parser),
+            colors=self._parse_colors(parser),
         )
 
     def _extract_geometry(
@@ -458,13 +481,14 @@ def main():
 
     archive_input = args.input.with_suffix(".zip")
     if archive_input.exists():
-        extractor.process_archive(archive_input, args.output, args.force)
+        extractor.process_archive(archive_input, args.output, args.force, args.filename)
     elif args.input.exists():
-        extractor.process_directory(args.input, args.output, args.force)
+        extractor.process_directory(args.input, args.output, args.force, args.filename)
     else:
         sys.exit(1)
 
-    extractor.finalize_extraction(args.output)
+    if not args.filename and args.archive:
+        extractor.finalize_extraction(args.output)
 
 
 if __name__ == "__main__":

@@ -1,21 +1,25 @@
+import argparse
 import json
 import time
 import zipfile
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 from playwright.sync_api import sync_playwright
 
 
 class BaseBikeCrawler:
-    def __init__(self, brand_name: str, artifacts_dir: Path, start_url: str):
+    def __init__(self, brand_name: str, artifacts_dir: Path, start_url: str, archive: bool = False):
         self.brand_name = brand_name
         self.artifacts_path = artifacts_dir / brand_name.lower()
         self.artifacts_path.mkdir(parents=True, exist_ok=True)
 
         self.urls_path = self.artifacts_path / "bike_urls.json"
         self.archive_path = self.artifacts_path / "raw_htmls.zip"
+        self.html_dir = self.artifacts_path / "raw_htmls"
         self.start_url = start_url
+        self.archive = archive
 
     def collect_urls(self) -> list[str]:
         """
@@ -39,11 +43,15 @@ class BaseBikeCrawler:
         raise NotImplementedError("get_slug_from_url() must be implemented by subclasses")
 
     def download_bike_pages(self, urls: list[str]):
-        # Determine which HTMLs already exist in the archive
+        # Determine which HTMLs already exist
         existing: set[str] = set()
-        if self.archive_path.exists():
-            with zipfile.ZipFile(self.archive_path, "r") as zread:
-                existing = set(zread.namelist())
+        if self.archive:
+            if self.archive_path.exists():
+                with zipfile.ZipFile(self.archive_path, "r") as zread:
+                    existing = set(zread.namelist())
+        else:
+            self.html_dir.mkdir(parents=True, exist_ok=True)
+            existing = {p.name for p in self.html_dir.glob("*.html")}
 
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -56,29 +64,50 @@ class BaseBikeCrawler:
             )
 
             total = len(urls)
-            # Open the archive in append mode once and stream pages into it
-            with zipfile.ZipFile(self.archive_path, "a", zipfile.ZIP_DEFLATED) as zwrite:
+
+            if self.archive:
+                # Open the archive in append mode once and stream pages into it
+                with zipfile.ZipFile(self.archive_path, "a", zipfile.ZIP_DEFLATED) as zwrite:
+                    for idx, url in enumerate(urls, start=1):
+                        self._download_single_page(page, url, idx, total, existing, zwrite=zwrite)
+            else:
                 for idx, url in enumerate(urls, start=1):
-                    slug = self.get_slug_from_url(url)
-                    name = f"{slug}.html"
-
-                    if name in existing:
-                        logger.debug("⏭️ [{:d}/{:d}] Skipping existing HTML for {}", idx, total, url)
-                        continue
-
-                    logger.info("⬇️ [{:d}/{:d}] Fetching: {}", idx, total, url)
-                    try:
-                        page.goto(url, wait_until="load")
-                        time.sleep(1)  # allow extra JS rendering time
-                        html = page.content()
-                        zwrite.writestr(name, html)
-                        logger.debug("💾 Saved HTML to archive {} (entry: {})", self.archive_path, name)
-                    except Exception as e:
-                        logger.error("❌ Failed to download {}: {}", url, e)
+                    self._download_single_page(page, url, idx, total, existing, html_dir=self.html_dir)
 
             browser.close()
 
-    def run(self):
+    def _download_single_page(
+        self,
+        page: Any,
+        url: str,
+        idx: int,
+        total: int,
+        existing: set[str],
+        zwrite: zipfile.ZipFile | None = None,
+        html_dir: Path | None = None,
+    ):
+        slug = self.get_slug_from_url(url)
+        name = f"{slug}.html"
+
+        if name in existing:
+            logger.debug("⏭️ [{:d}/{:d}] Skipping existing HTML for {}", idx, total, url)
+            return
+
+        logger.info("⬇️ [{:d}/{:d}] Fetching: {}", idx, total, url)
+        try:
+            page.goto(url, wait_until="load")
+            time.sleep(1)  # allow extra JS rendering time
+            html = page.content()
+            if zwrite:
+                zwrite.writestr(name, html)
+                logger.debug("💾 Saved HTML to archive {} (entry: {})", self.archive_path, name)
+            elif html_dir:
+                (html_dir / name).write_text(html, encoding="utf-8")
+                logger.debug("💾 Saved HTML to {}/{}", html_dir, name)
+        except Exception as e:
+            logger.error("❌ Failed to download {}: {}", url, e)
+
+    def run(self, args: argparse.Namespace | None = None):
         if not self.urls_path.exists():
             logger.info("🚀 Starting URL collection for {}", self.brand_name)
             urls = self.collect_urls()
@@ -88,3 +117,9 @@ class BaseBikeCrawler:
             logger.info("📥 Loaded {} bike URLs from {}", len(urls), self.urls_path)
 
         self.download_bike_pages(urls)
+
+    @classmethod
+    def get_base_parser(cls, brand: str) -> argparse.ArgumentParser:
+        parser = argparse.ArgumentParser(description=f"Crawl {brand.capitalize()} bike data.")
+        parser.add_argument("--archive", action="store_true", help="Archive results into a zip file.")
+        return parser

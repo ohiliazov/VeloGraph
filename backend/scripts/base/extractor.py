@@ -160,8 +160,8 @@ class BaseBikeExtractor:
         shutil.rmtree(json_dir)
         logger.info("🗑️ Removed original folder: {}", json_dir)
 
-    def process_archive(self, html_zip: Path, json_dir: Path, force: bool = False):
-        """Processes all HTML files in a zip archive."""
+    def process_archive(self, html_zip: Path, json_dir: Path, force: bool = False, filename: str | None = None):
+        """Processes HTML files in a zip archive."""
         json_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"📦 Scanning archive: {html_zip}...")
 
@@ -171,7 +171,14 @@ class BaseBikeExtractor:
 
         with zipfile.ZipFile(html_zip, "r") as z:
             names = set(z.namelist())
-            html_files = sorted([n for n in names if n.endswith(".html")])
+            if filename:
+                if filename not in names:
+                    logger.error(f"❌ File {filename} not found in archive {html_zip}")
+                    return
+                html_files = [filename]
+            else:
+                html_files = sorted([n for n in names if n.endswith(".html")])
+
             total = len(html_files)
 
             for idx, html_name in enumerate(html_files, 1):
@@ -213,12 +220,20 @@ class BaseBikeExtractor:
 
         logger.success(f"🏁 Done. Processed: {files_processed} | Skipped: {skipped_count}")
 
-    def process_directory(self, html_dir: Path, json_dir: Path, force: bool = False):
-        """Processes all HTML files in a directory."""
+    def process_directory(self, html_dir: Path, json_dir: Path, force: bool = False, filename: str | None = None):
+        """Processes HTML files in a directory."""
         json_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"📂 Scanning directory: {html_dir}...")
 
-        html_files = sorted(list(html_dir.glob("*.html")))
+        if filename:
+            html_path = html_dir / filename
+            if not html_path.exists():
+                logger.error(f"❌ File {filename} not found in directory {html_dir}")
+                return
+            html_files = [html_path]
+        else:
+            html_files = sorted(list(html_dir.glob("*.html")))
+
         total = len(html_files)
         processed_htmls = set()
         files_processed = 0
@@ -284,4 +299,8 @@ class BaseBikeExtractor:
             help="Directory to save extracted JSON files.",
         )
         parser.add_argument("--force", action="store_true", help="Overwrite existing JSON files.")
+        parser.add_argument("--filename", type=str, help="Process only this specific file.")
+        parser.add_argument(
+            "--archive", action="store_true", help="Archive results into a zip file and remove directory."
+        )
         return parser
