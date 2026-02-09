@@ -2,7 +2,7 @@ import re
 import sys
 from typing import Any, ClassVar
 
-from bs4 import BeautifulSoup, SoupStrainer, Tag
+from selectolax.lexbor import LexborHTMLParser
 
 from backend.scripts.base import BaseBikeExtractor, BikeMeta, ColorVariant, ExtractedBikeData
 from backend.scripts.constants import artifacts_dir
@@ -25,137 +25,177 @@ class KrossBikeExtractor(BaseBikeExtractor):
     def __init__(self):
         super().__init__(brand_name="Kross")
 
-    def _extract_meta(self, soup: BeautifulSoup) -> BikeMeta:
-        """Extracts basic metadata from BeautifulSoup object."""
-        meta_data = {
-            "brand": "Kross",
-            "model": "",
-            "categories": [],
-            "model_year": None,
-            "wheel_size": None,
-            "max_tire_width": None,
-            "material": None,
-            "source_url": "",
-            "colors": [],
-        }
+    # --- Meta parsers (one function per field) ---
+    def _parse_brand(self) -> str:
+        return "Kross"
 
-        # OG tags
-        title_tag = soup.find("meta", property="og:title")
-        if title_tag and isinstance(title_tag, Tag):
-            title = title_tag.get("content", "").strip()
+    def _parse_model(self, parser: LexborHTMLParser) -> str:
+        title_tag = parser.css_first('meta[property="og:title"]')
+        if title_tag:
+            title = title_tag.attributes.get("content", "").strip()
             if " | " in title:
-                meta_data["model"] = title.split(" | ")[0].strip()
+                return title.split(" | ")[0].strip()
+            return title
+        return ""
 
-        url_tag = soup.find("meta", property="og:url")
-        if url_tag and isinstance(url_tag, Tag):
-            meta_data["source_url"] = url_tag.get("content", "").strip()
+    def _parse_source_url(self, parser: LexborHTMLParser) -> str:
+        url_tag = parser.css_first('meta[property="og:url"]')
+        if url_tag:
+            return url_tag.attributes.get("content", "").strip()
+        return ""
 
-        # Breadcrumbs & Year
-        breadcrumbs = soup.find("div", class_="product-breadcrumbs")
+    def _parse_categories(self, parser: LexborHTMLParser) -> list[str]:
+        out: list[str] = []
+        breadcrumbs = parser.css_first("div.product-breadcrumbs")
         if breadcrumbs:
-            raw_text = breadcrumbs.get_text(strip=True)
+            raw_text = breadcrumbs.text(strip=True)
             raw_cats = [c.strip() for c in re.split(r"\s*/\s*", raw_text)]
             for c in raw_cats:
-                if c.isdigit() and len(c) == 4 and 2000 <= int(c) <= 2100:
-                    meta_data["model_year"] = int(c)
-                elif c:
-                    meta_data["categories"].append(c)
-
-        if not meta_data["categories"]:
-            # Fallback to standard breadcrumbs: breadcrumbs > ul > li
-            breadcrumbs_fallback = soup.find("div", class_="breadcrumbs")
+                if not (c.isdigit() and len(c) == 4 and 2000 <= int(c) <= 2100) and c:
+                    out.append(c)
+        if not out:
+            breadcrumbs_fallback = parser.css_first("div.breadcrumbs")
             if breadcrumbs_fallback:
-                for li in breadcrumbs_fallback.find_all("li"):
-                    classes = li.get("class", [])
-                    if isinstance(classes, str):
-                        classes = [classes]
-
+                for li in breadcrumbs_fallback.css("li"):
+                    classes = li.attributes.get("class", "")
+                    classes = classes.split() if isinstance(classes, str) else []
                     has_category_class = any(
                         c.startswith("category") and any(char.isdigit() for char in c) for c in classes
                     )
                     if has_category_class:
-                        cat_text = li.get_text(strip=True)
+                        cat_text = li.text(strip=True)
                         if cat_text:
-                            meta_data["categories"].append(cat_text)
+                            out.append(cat_text)
+        return out
 
-        # Colors from product-item-colors
-        related_colors_div = soup.find("div", class_="product-related-colors")
+    def _parse_model_year(self, parser: LexborHTMLParser) -> int | None:
+        breadcrumbs = parser.css_first("div.product-breadcrumbs")
+        if breadcrumbs:
+            raw_text = breadcrumbs.text(strip=True)
+            for c in re.split(r"\s*/\s*", raw_text):
+                if c.isdigit() and len(c) == 4 and 2000 <= int(c) <= 2100:
+                    return int(c)
+        return None
+
+    def _parse_colors(self, parser: LexborHTMLParser) -> list[ColorVariant]:
+        out: list[ColorVariant] = []
+        related_colors_div = parser.css_first("div.product-related-colors")
         if related_colors_div:
-            color_variants = []
-            for color_div in related_colors_div.find_all("div", class_="product-item-colors"):
-                a_tag = color_div.find("a", class_="variant-item")
-                if a_tag and isinstance(a_tag, Tag):
-                    v_url = a_tag.get("href", "").strip()
-                    v_color = a_tag.get("title", "").strip()
+            for color_div in related_colors_div.css("div.product-item-colors"):
+                a_tag = color_div.css_first("a.variant-item")
+                if a_tag:
+                    v_url = a_tag.attributes.get("href", "").strip()
+                    v_color = a_tag.attributes.get("title", "").strip()
                     v_url_path = v_url.split("?")[0].rstrip("/")
                     v_html_name = v_url_path.split("/")[-1] + ".html"
+                    out.append(ColorVariant(html_path=v_html_name, color=v_color, url=v_url))
+        return out
 
-                    color_variants.append(ColorVariant(html_path=v_html_name, color=v_color, url=v_url))
-            if color_variants:
-                meta_data["colors"] = color_variants
-
-        return BikeMeta(**meta_data)
-
-    def extract_bike_data(self, html: str, additional_data: Any = None) -> ExtractedBikeData | None:
-        """Parses Kross bike HTML."""
-        strainer = SoupStrainer(["meta", "div", "table", "ul", "li", "a"])
-        try:
-            soup = BeautifulSoup(html, "lxml", parse_only=strainer)
-        except Exception:
-            soup = BeautifulSoup(html, "html.parser", parse_only=strainer)
-
-        bike_meta = self._extract_meta(soup)
-        components = {k: [] for k in self.COMPONENT_KEYWORDS}
-
-        # --- 1. Extract from Additional Attributes (Specyfikacja) ---
-        spec_tables = soup.find_all("table", class_="additional-attributes-table")
+    def _parse_material(self, parser: LexborHTMLParser) -> str | None:
+        spec_tables = parser.css("table.additional-attributes-table")
         for table in spec_tables:
-            for row in table.find_all("tr"):
-                title_cell = row.find("td", class_="box-title")
-                content_cell = row.find("td", class_="box-content")
+            for row in table.css("tr"):
+                title_cell = row.css_first("td.box-title")
+                content_cell = row.css_first("td.box-content")
                 if not (title_cell and content_cell):
                     continue
+                attr_name = title_cell.text(strip=True)
+                attr_content = content_cell.text(strip=True)
+                if "rama" in attr_name.lower():
+                    return attr_content
+        return None
 
-                attr_name = title_cell.get_text(strip=True)
-                attr_content = content_cell.get_text(strip=True)
-                attr_lower = attr_name.lower()
-
-                # Metadata updates
-                if "rama" in attr_lower:
-                    bike_meta.material = attr_content
-                elif "maksymalna szerokość opony" in attr_lower:
-                    bike_meta.max_tire_width = self.clean_value(attr_content)
-                elif not bike_meta.wheel_size and "opony" in attr_lower:
+    def _parse_wheel_size(self, parser: LexborHTMLParser) -> str | None:
+        spec_tables = parser.css("table.additional-attributes-table")
+        for table in spec_tables:
+            for row in table.css("tr"):
+                title_cell = row.css_first("td.box-title")
+                content_cell = row.css_first("td.box-content")
+                if not (title_cell and content_cell):
+                    continue
+                attr_name = title_cell.text(strip=True)
+                attr_content = content_cell.text(strip=True)
+                if "opony" in attr_name.lower():
                     match = re.search(r"(\d{3})x|(\d{2}[.,]\d)\"|(\d{2})\"", attr_content, re.IGNORECASE)
                     if match:
                         val = match.group(1) or match.group(2) or match.group(3)
-                        bike_meta.wheel_size = self.normalize_wheel_size(val)
+                        return self.normalize_wheel_size(val)
+        return None
 
-                # BuildKit components
+    def _parse_max_tire_width(self, parser: LexborHTMLParser) -> float | str | None:
+        spec_tables = parser.css("table.additional-attributes-table")
+        for table in spec_tables:
+            for row in table.css("tr"):
+                title_cell = row.css_first("td.box-title")
+                content_cell = row.css_first("td.box-content")
+                if not (title_cell and content_cell):
+                    continue
+                attr_name = title_cell.text(strip=True)
+                attr_content = content_cell.text(strip=True)
+                if "maksymalna szerokość opony" in attr_name.lower():
+                    return self.clean_value(attr_content)
+        return None
+
+    def _extract_meta(self, parser: LexborHTMLParser) -> BikeMeta:
+        return BikeMeta(
+            brand=self._parse_brand(),
+            model=self._parse_model(parser),
+            categories=self._parse_categories(parser),
+            model_year=self._parse_model_year(parser),
+            wheel_size=self._parse_wheel_size(parser),
+            max_tire_width=self._parse_max_tire_width(parser),
+            material=self._parse_material(parser),
+            source_url=self._parse_source_url(parser),
+            colors=self._parse_colors(parser),
+        )
+
+    def extract_bike_data(self, html: str, additional_data: Any = None) -> ExtractedBikeData | None:
+        """Parses Kross bike HTML."""
+        parser = LexborHTMLParser(html)
+
+        # --- Meta via dedicated field parsers ---
+        bike_meta = self._extract_meta(parser)
+        components = {k: [] for k in self.COMPONENT_KEYWORDS}
+
+        # --- 1. Extract from Additional Attributes (Specyfikacja) ---
+        spec_tables = parser.css("table.additional-attributes-table")
+        for table in spec_tables:
+            for row in table.css("tr"):
+                title_cell = row.css_first("td.box-title")
+                content_cell = row.css_first("td.box-content")
+                if not (title_cell and content_cell):
+                    continue
+
+                attr_name = title_cell.text(strip=True)
+                attr_content = content_cell.text(strip=True)
+
+                # BuildKit components only (metadata handled by dedicated parsers)
                 self._categorize_component(attr_name, attr_content, components)
 
-        # --- 2. Find and Extract Geometry Table ---
+        # --- 2. Geometry: handled by a single function ---
         target_table = None
-        for table in soup.find_all("table"):
-            thead = table.find("thead")
-            if thead and thead.find("th") and "Rozmiar" in thead.find("th").get_text():
-                target_table = table
-                break
+        for table in parser.css("table"):
+            thead = table.css_first("thead")
+            if thead:
+                th = thead.css_first("th")
+                if th and "Rozmiar" in th.text():
+                    target_table = table
+                    break
 
         if not target_table:
             return None
 
-        # --- 3. Extract Table Data (Sizes & Specs) ---
-        bike_sizes = []
-        bike_specs = {}
+        # Extract sizes and specs from geometry table
+        bike_sizes: list[str] = []
+        bike_specs: dict[str, list[float | int | str | None]] = {}
 
-        # Headers (Sizes)
-        header_row = target_table.find("thead").find("tr")
+        thead = target_table.css_first("thead")
+        header_row = thead.css_first("tr") if thead else None
         if not header_row:
             return None
 
-        for th in header_row.find_all("th")[1:]:
-            size_text = th.get_text(strip=True)
+        for th in header_row.css("th")[1:]:
+            size_text = th.text(strip=True)
             bike_sizes.append(size_text)
 
             # Wheel size from header if missing
@@ -166,28 +206,24 @@ class KrossBikeExtractor(BaseBikeExtractor):
                     if val:
                         bike_meta.wheel_size = self.normalize_wheel_size(val)
 
-        # Body (Specs)
-        tbody = target_table.find("tbody")
+        tbody = target_table.css_first("tbody")
         if tbody:
-            for row in tbody.find_all("tr"):
-                cells = row.find_all("td")
+            for row in tbody.css("tr"):
+                cells = row.css("td")
                 if not cells:
                     continue
-                attr_name = cells[0].get_text(strip=True)
+                attr_name = cells[0].text(strip=True)
 
-                # Map header to standardized key
                 mapped_key = None
                 attr_lower = attr_name.lower()
                 for internal_key, labels in self.GEO_MAP.items():
                     if any(label.lower() in attr_lower for label in labels):
                         mapped_key = internal_key
                         break
-
                 if not mapped_key:
                     mapped_key = attr_name
 
-                values = [self.clean_value(cell.get_text(strip=True)) for cell in cells[1:]]
-                # Pad values if shorter than sizes
+                values = [self.clean_value(cell.text(strip=True)) for cell in cells[1:]]
                 values.extend([None] * (len(bike_sizes) - len(values)))
                 bike_specs[mapped_key] = values
 

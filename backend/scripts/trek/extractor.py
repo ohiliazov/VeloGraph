@@ -1,3 +1,4 @@
+import html
 import json
 import re
 import sys
@@ -5,10 +6,10 @@ import zipfile
 from pathlib import Path
 from typing import Any, ClassVar
 
-from bs4 import BeautifulSoup, SoupStrainer, Tag
 from loguru import logger
+from selectolax.lexbor import LexborHTMLParser
 
-from backend.scripts.base import BaseBikeExtractor, BikeMeta, ExtractedBikeData
+from backend.scripts.base import BaseBikeExtractor, BikeMeta, ColorVariant, ExtractedBikeData
 from backend.scripts.constants import artifacts_dir
 
 
@@ -29,38 +30,205 @@ class TrekBikeExtractor(BaseBikeExtractor):
     def __init__(self):
         super().__init__(brand_name="Trek")
 
-    def _extract_meta(self, soup: BeautifulSoup) -> BikeMeta:
-        meta_data = {
-            "brand": "Trek",
-            "model": "",
-            "categories": [],
-            "model_year": None,
-            "wheel_size": None,
-            "max_tire_width": None,
-            "material": None,
-            "source_url": "",
-        }
+    # --- Meta parsers (one function per field) ---
+    def _parse_brand(self) -> str:
+        return "Trek"
 
-        # OG tags
-        title_tag = soup.find("meta", property="og:title")
-        if title_tag and isinstance(title_tag, Tag):
-            title = title_tag.get("content", "").strip()
-            # Remove " - Trek Bikes (PL)"
-            title = re.sub(r"\s*-\s*Trek Bikes.*", "", title, flags=re.IGNORECASE)
-            meta_data["model"] = title
+    def _parse_model(self, parser: LexborHTMLParser) -> str:
+        # 1) Try JSON-LD Product data first
+        def _try_from_ld(obj: Any) -> str | None:
+            try:
+                if isinstance(obj, dict):
+                    t = str(obj.get("@type") or obj.get("type") or "").lower()
+                    if t in {"product", "productmodel", "bike", "bicycle"} and obj.get("name"):
+                        return str(obj.get("name")).strip()
+                    # Some pages put data in @graph
+                    if "@graph" in obj and isinstance(obj["@graph"], list):
+                        for it in obj["@graph"]:
+                            name = _try_from_ld(it)
+                            if name:
+                                return name
+            except Exception:
+                pass
+            return None
 
-        url_tag = soup.find("meta", property="og:url")
-        if url_tag and isinstance(url_tag, Tag):
-            meta_data["source_url"] = url_tag.get("content", "").strip()
+        for sc in parser.css('script[type="application/ld+json"]'):
+            try:
+                data = json.loads(sc.text())
+            except Exception:
+                continue
+            if isinstance(data, list):
+                for it in data:
+                    name = _try_from_ld(it)
+                    if name:
+                        return html.unescape(name)
+            else:
+                name = _try_from_ld(data)
+                if name:
+                    return html.unescape(name)
 
-        # Categories from breadcrumbs
-        breadcrumb_links = soup.select('nav[aria-label="Breadcrumb"] a, .breadcrumb a')
-        for link in breadcrumb_links:
-            cat = link.get_text(strip=True)
+        # 2) H1 product title candidates (PDP pages)
+        h1_candidates = [
+            'h1[qaid="pdp-product-title"]',
+            "h1.product-title",
+            "h1.product-name",
+            "h1.pdp__title",
+            "h1.page-title",
+            "h1",
+        ]
+        for sel in h1_candidates:
+            node = parser.css_first(sel)
+            if node:
+                txt = node.text(strip=True)
+                if txt:
+                    return html.unescape(txt)
+
+        # 3) Breadcrumb last item as a fallback (skip generic nodes)
+        crumbs = parser.css('nav[aria-label="Breadcrumb"] a, .breadcrumb a')
+        if crumbs:
+            last = crumbs[-1].text(strip=True)
+            if last and last.lower() not in {"home", "rowery", "sklep"}:
+                return html.unescape(last)
+
+        # 4) Last resort: use og:title only if it looks like a product, and trim brand suffix
+        title_tag = parser.css_first('meta[property="og:title"]')
+        if title_tag:
+            title = title_tag.attributes.get("content", "").strip()
+            # Avoid obvious collection/listing titles
+            if not re.search(r"kolekcj|overview|model overview", title, flags=re.IGNORECASE):
+                cleaned = re.sub(r"\s*-\s*Trek Bikes.*", "", title, flags=re.IGNORECASE)
+                return html.unescape(cleaned)
+        return ""
+
+    def _parse_source_url(self, parser: LexborHTMLParser) -> str:
+        # Prefer canonical link
+        canonical = parser.css_first('link[rel="canonical"]')
+        if canonical:
+            href = canonical.attributes.get("href", "").strip()
+            if href:
+                return href
+        # Fallback to JSON-LD Product.url
+        for sc in parser.css('script[type="application/ld+json"]'):
+            try:
+                data = json.loads(sc.text())
+            except Exception:
+                continue
+            objs = data if isinstance(data, list) else [data]
+            for obj in objs:
+                if isinstance(obj, dict) and obj.get("url"):
+                    return str(obj.get("url")).strip()
+                if isinstance(obj, dict) and "@graph" in obj and isinstance(obj["@graph"], list):
+                    for it in obj["@graph"]:
+                        if isinstance(it, dict) and it.get("url"):
+                            return str(it.get("url")).strip()
+        # Fallback to OG url if present
+        url_tag = parser.css_first('meta[property="og:url"]')
+        if url_tag:
+            return url_tag.attributes.get("content", "").strip()
+        return ""
+
+    def _parse_categories(self, parser: LexborHTMLParser) -> list[str]:
+        out: list[str] = []
+        for link in parser.css('nav[aria-label="Breadcrumb"] a, .breadcrumb a'):
+            cat = link.text(strip=True)
             if cat and cat.lower() not in ["home", "rowery", "sklep"]:
-                meta_data["categories"].append(cat)
+                out.append(cat)
+        return out
 
-        return BikeMeta(**meta_data)
+    def _parse_model_year(self, parser: LexborHTMLParser) -> int | None:
+        return None
+
+    def _parse_wheel_size(self, parser: LexborHTMLParser) -> str | None:
+        return None
+
+    def _parse_max_tire_width(self, parser: LexborHTMLParser) -> float | str | None:
+        return None
+
+    def _parse_material(self, parser: LexborHTMLParser) -> str | None:
+        # Trek product pages often lazy-load specs; default to None here.
+        return None
+
+    def _parse_colors(self, parser: LexborHTMLParser) -> list[ColorVariant]:
+        # Trek color variants are complex and often dynamic; default to []
+        return []
+
+    def _extract_meta(self, parser: LexborHTMLParser) -> BikeMeta:
+        return BikeMeta(
+            brand=self._parse_brand(),
+            model=self._parse_model(parser),
+            categories=self._parse_categories(parser),
+            model_year=self._parse_model_year(parser),
+            wheel_size=self._parse_wheel_size(parser),
+            max_tire_width=self._parse_max_tire_width(parser),
+            material=self._parse_material(parser),
+            source_url=self._parse_source_url(parser),
+        )
+
+    def _extract_geometry(
+        self, parser: LexborHTMLParser, additional_data: Any
+    ) -> tuple[list[str], dict[str, list[float | int | str | None]]]:
+        # Prefer JSON sizing if available
+        if additional_data:
+            sizes, specs = self._extract_from_sizing_json(additional_data)
+            if sizes and specs:
+                return sizes, specs
+
+        # Fallback to Geometry Table in HTML
+        bike_sizes: list[str] = []
+        bike_specs: dict[str, list[float | int | str | None]] = {}
+
+        target_table = parser.css_first("table#sizing-table") or parser.css_first("table.sizing-table__table")
+        if not target_table:
+            return [], {}
+
+        thead = target_table.css_first("thead")
+        if not thead:
+            return [], {}
+
+        header_row = thead.css_first("tr")
+        headers = [th.text(strip=True) for th in header_row.css("th, td")] if header_row else []
+
+        tbody = target_table.css_first("tbody")
+        if not tbody:
+            return [], {}
+
+        rows = tbody.css("tr")
+        for row in rows:
+            cells = row.css("th, td")
+            if not cells:
+                continue
+            size_label = cells[0].text(strip=True)
+
+            # Include position if present among headers
+            pos_idx = -1
+            for i, h in enumerate(headers):
+                if "Położenie" in h:
+                    pos_idx = i
+                    break
+
+            full_size_label = size_label
+            if pos_idx != -1 and pos_idx < len(cells):
+                pos_val = cells[pos_idx].text(strip=True)
+                if pos_val:
+                    full_size_label = f"{size_label} ({pos_val})"
+
+            bike_sizes.append(full_size_label)
+
+            for i, cell in enumerate(cells[1:], start=1):
+                if i >= len(headers):
+                    continue
+                header = headers[i]
+                mapped_key = None
+                header_lower = header.lower()
+                for internal_key, labels in self.GEO_MAP.items():
+                    if any(label.lower() in header_lower for label in labels):
+                        mapped_key = internal_key
+                        break
+                if not mapped_key:
+                    mapped_key = header
+                bike_specs.setdefault(mapped_key, []).append(self.clean_value(cell.text(strip=True)))
+
+        return bike_sizes, bike_specs
 
     def _extract_from_sizing_json(
         self, sizing_data
@@ -196,122 +364,41 @@ class TrekBikeExtractor(BaseBikeExtractor):
         return None, None
 
     def extract_bike_data(self, html: str, additional_data: Any = None) -> ExtractedBikeData | None:
-        strainer = SoupStrainer(["meta", "div", "table", "ul", "li", "a", "nav", "dt", "dd", "h1", "script"])
-        try:
-            soup = BeautifulSoup(html, "lxml", parse_only=strainer)
-        except Exception:
-            soup = BeautifulSoup(html, "html.parser", parse_only=strainer)
+        parser = LexborHTMLParser(html)
 
-        bike_meta = self._extract_meta(soup)
+        bike_meta = self._extract_meta(parser)
         components = {k: [] for k in self.COMPONENT_KEYWORDS}
 
         # --- 1. Extract Specifications (dt/dd) ---
-        dts = soup.find_all("dt", class_="details-list__title")
+        dts = parser.css("dt.details-list__title")
         for dt in dts:
-            dd = dt.find_next_sibling("dd")
+            dd = dt.next
+            while dd and dd.tag != "dd":
+                dd = dd.next
             if not dd:
                 continue
-
-            attr_name = dt.get_text(strip=True)
-            attr_content = dd.get_text(strip=True)
-            attr_lower = attr_name.lower()
-
-            if "rama" in attr_lower and not bike_meta.material:
-                bike_meta.material = attr_content
-            elif "opony" in attr_lower and not bike_meta.wheel_size:
-                match = re.search(r"(\d{3})x|(\d{2}[.,]\d)\"|(\d{2})\"", attr_content)
-                if match:
-                    val = match.group(1) or match.group(2) or match.group(3)
-                    bike_meta.wheel_size = self.normalize_wheel_size(val)
-
+            attr_name = dt.text(strip=True)
+            attr_content = dd.text(strip=True)
             self._categorize_component(attr_name, attr_content, components)
 
-        bike_sizes: list[str] = []
-        bike_specs: dict[str, list[float | int | str | None]] = {}
-
-        # --- Prefer JSON sizing if available ---
-        if additional_data:
-            sizes, specs = self._extract_from_sizing_json(additional_data)
-            if sizes and specs:
-                bike_sizes = sizes
-                bike_specs = specs
-
-        # --- Fallback to Geometry Table in HTML ---
+        # --- 2. Geometry (single dedicated function) ---
+        bike_sizes, bike_specs = self._extract_geometry(parser, additional_data)
         if not bike_sizes:
-            target_table = soup.find("table", id="sizing-table") or soup.find("table", class_="sizing-table__table")
-            if not target_table:
-                return None
+            return None
 
-            # Headers
-            thead = target_table.find("thead")
-            if not thead:
-                return None
-
-            header_row = thead.find("tr")
-            headers = [th.get_text(strip=True) for th in header_row.find_all(["th", "td"])]
-
-            # Body
-            tbody = target_table.find("tbody")
-            if not tbody:
-                return None
-
-            rows = tbody.find_all("tr")
-            for row in rows:
-                cells = row.find_all(["th", "td"])
-                if not cells:
-                    continue
-
-                # In Trek's table, sizes are in the first column
-                size_label = cells[0].get_text(strip=True)
-
-                # Include position if present among headers
-                pos_idx = -1
-                for i, h in enumerate(headers):
-                    if "Położenie" in h:
-                        pos_idx = i
+        # --- 3. Wheel size fallback from specs if still missing ---
+        if not bike_meta.wheel_size:
+            for attr, vals in bike_specs.items():
+                if "rozmiar kół" in str(attr).lower() and vals:
+                    for v in vals:
+                        if not v:
+                            continue
+                        m = re.search(r"(\d{3})|(\d{2}[.,]\d)|(\d{2})", str(v))
+                        if m:
+                            bike_meta.wheel_size = self.normalize_wheel_size(m.group(0))
+                            break
+                    if bike_meta.wheel_size:
                         break
-
-                full_size_label = size_label
-                if pos_idx != -1 and pos_idx < len(cells):
-                    pos_val = cells[pos_idx].get_text(strip=True)
-                    if pos_val:
-                        full_size_label = f"{size_label} ({pos_val})"
-
-                bike_sizes.append(full_size_label)
-
-                for i, cell in enumerate(cells[1:], start=1):
-                    if i >= len(headers):
-                        continue
-                    header = headers[i]
-                    # Map header to standardized key
-                    mapped_key = None
-                    header_lower = header.lower()
-                    for internal_key, labels in self.GEO_MAP.items():
-                        if any(label.lower() in header_lower for label in labels):
-                            mapped_key = internal_key
-                            break
-
-                    if not mapped_key:
-                        mapped_key = header
-
-                    if mapped_key not in bike_specs:
-                        bike_specs[mapped_key] = []
-
-                    bike_specs[mapped_key].append(self.clean_value(cell.get_text(strip=True)))
-
-            # Wheel size from table if still missing
-            if not bike_meta.wheel_size and rows:
-                for i, h in enumerate(headers):
-                    if "Rozmiar kół" in h:
-                        for row in rows:
-                            cells = row.find_all(["th", "td"])
-                            if len(cells) > i:
-                                val = cells[i].get_text(strip=True)
-                                bike_meta.wheel_size = self.normalize_wheel_size(val)
-                                if bike_meta.wheel_size:
-                                    break
-                        if bike_meta.wheel_size:
-                            break
 
         return ExtractedBikeData(
             meta=bike_meta,

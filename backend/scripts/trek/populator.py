@@ -50,7 +50,7 @@ def populate_from_json_data(session: Session, data: dict[str, Any], source_name:
     sizes = data.get("sizes", [])
     specs = data.get("specs", {})
 
-    brand = "Kross"
+    brand = "Trek"
     model_name = meta.get("model", "").strip()
     material = meta.get("material")
     categories = meta.get("categories", [])
@@ -204,20 +204,20 @@ def populate_from_archive(session: Session, json_zip: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Populate database with Kross bike data from JSON files.")
+    parser = argparse.ArgumentParser(description="Populate database with Trek bike data from JSON files.")
     parser.add_argument(
         "--input",
         type=Path,
-        default=artifacts_dir / "kross" / "extracted_jsons",
+        default=artifacts_dir / "trek" / "extracted_jsons",
         help="Directory containing extracted JSON files.",
     )
 
     args = parser.parse_args()
 
     with SessionLocal() as session:
-        logger.info("🗑️ Clearing existing 'Kross' products and framesets from database...")
-        session.execute(delete(BikeProductORM).where(BikeProductORM.sku.like("KROSS-%")))
-        session.execute(delete(FramesetORM).where(FramesetORM.name.like("Kross %")))
+        logger.info("🗑️ Clearing existing 'Trek' products and framesets from database...")
+        session.execute(delete(BikeProductORM).where(BikeProductORM.sku.like("TREK-%")))
+        session.execute(delete(FramesetORM).where(FramesetORM.name.like("Trek %")))
         session.commit()
 
     with SessionLocal() as session:
@@ -231,7 +231,7 @@ def main():
             return
 
         session.commit()
-        logger.success(f"✅ Done populating DB with Kross bike geometry: {count} files processed.")
+        logger.success(f"✅ Done populating DB with Trek bike geometry: {count} files processed.")
 
 
 if __name__ == "__main__":

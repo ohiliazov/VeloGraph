@@ -58,7 +58,7 @@ class BuildKitSchema(BaseModel):
 class BikeProductSchema(BaseModel):
     id: int
     sku: str
-    colors: list[str] = []
+    colors: list[str | None] = []
     source_url: str | None = None
     frameset: FramesetSchema
     build_kit: BuildKitSchema
