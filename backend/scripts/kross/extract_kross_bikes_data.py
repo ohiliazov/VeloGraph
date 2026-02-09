@@ -42,17 +42,17 @@ class ExtractedBikeData(BaseModel):
 
 
 # --- Constants ---
-RELEVANT_GEO_KEYS = {
-    "Stack",
-    "Reach",
-    "TT - efektywna długość górnej rury",
-    "ST - Długość rury podsiodłowej",
-    "HT - Długość główki ramy",
-    "CS - Długość tylnych widełek",
-    "HA - Kąt główki ramy",
-    "SA - Kąt rury podsiodłowej",
-    "BBDROP",
-    "WB - Baza kół",
+GEO_MAP = {
+    "stack": ["Stack"],
+    "reach": ["Reach"],
+    "TT": ["TT - efektywna długość górnej rury"],
+    "ST": ["ST - Długość rury podsiodłowej"],
+    "HT": ["HT - Długość główki ramy"],
+    "CS": ["CS - Długość tylnych widełek"],
+    "HA": ["HA - Kąt główki ramy"],
+    "SA": ["SA - Kąt rury podsiodłowej"],
+    "bb_drop": ["BBDROP"],
+    "WB": ["WB - Baza kół"],
 }
 
 COMPONENT_KEYWORDS = {
@@ -312,10 +312,23 @@ def extract_bike_data(html: str) -> ExtractedBikeData | None:
             if not cells:
                 continue
             attr_name = cells[0].get_text(strip=True)
+
+            # Map header to standardized key
+            mapped_key = None
+            attr_lower = attr_name.lower()
+            for internal_key, labels in GEO_MAP.items():
+                if any(label.lower() in attr_lower for label in labels):
+                    mapped_key = internal_key
+                    break
+
+            if not mapped_key:
+                # Keep original if not in map, but we'll filter later
+                mapped_key = attr_name
+
             values = [clean_value(cell.get_text(strip=True)) for cell in cells[1:]]
             # Pad values if shorter than sizes
             values.extend([None] * (len(bike_sizes) - len(values)))
-            bike_specs[attr_name] = values
+            bike_specs[mapped_key] = values
 
     # Wheel size from geometry row if still missing
     if not bike_meta.wheel_size:
@@ -348,8 +361,31 @@ def extract_bike_data(html: str) -> ExtractedBikeData | None:
         meta=bike_meta,
         build_kit=_assemble_build_kit(components),
         sizes=bike_sizes,
-        specs={k: v for k, v in bike_specs.items() if k in RELEVANT_GEO_KEYS},
+        specs={k: v for k, v in bike_specs.items() if k in GEO_MAP},
     )
+
+
+def finalize_extraction(json_dir: Path):
+    """
+    Archives extracted_jsons to a zip file and removes the original folder.
+    """
+    if not json_dir.exists():
+        logger.warning(f"⚠️ Cannot finalize: {json_dir} does not exist")
+        return
+
+    archive_path = json_dir.parent / "extracted_jsons.zip"
+    logger.info("📦 Archiving extracted_jsons to {}...", archive_path)
+
+    with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+        # Sort files to be deterministic in zip
+        for json_file in sorted(json_dir.glob("*.json")):
+            zipf.write(json_file, arcname=json_file.name)
+
+    logger.success("✅ JSON archive created: {}", archive_path)
+
+    # Remove the folder after archiving
+    shutil.rmtree(json_dir)
+    logger.info("🗑️ Removed original folder: {}", json_dir)
 
 
 def process_archive(html_zip: Path, json_dir: Path, force: bool = False):
@@ -407,19 +443,6 @@ def process_archive(html_zip: Path, json_dir: Path, force: bool = False):
                 processed_htmls.add(html_name)
 
     logger.success(f"🏁 Done. Processed: {files_processed} | Skipped: {skipped_count}")
-
-    # Finalizer: Archive extracted_jsons
-    archive_path = json_dir.parent / "extracted_jsons.zip"
-    logger.info("📦 Archiving extracted_jsons to {}...", archive_path)
-    with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-        for json_file in json_dir.glob("*.json"):
-            zipf.write(json_file, arcname=json_file.name)
-    logger.success("✅ JSON archive created: {}", archive_path)
-
-    # Remove the folder after archiving
-    if json_dir.exists():
-        shutil.rmtree(json_dir)
-        logger.info("🗑️ Removed original folder: {}", json_dir)
 
 
 def process_directory(html_dir: Path, json_dir: Path, force: bool = False):
@@ -504,6 +527,9 @@ def main():
     else:
         logger.error(f"❌ Input '{args.input}' (directory or zip) not found.")
         sys.exit(1)
+
+    # Always finalize (archive and cleanup)
+    finalize_extraction(args.output)
 
 
 if __name__ == "__main__":
