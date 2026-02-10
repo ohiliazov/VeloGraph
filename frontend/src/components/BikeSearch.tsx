@@ -517,7 +517,7 @@ export default function BikeSearch() {
 
                   return (
                     <tr
-                      key={isGroup ? groupKey : product.id}
+                      key={isGroup ? groupKey : definition?.id}
                       className="group hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-all duration-200"
                     >
                       <td className="px-6 py-5">
@@ -527,7 +527,7 @@ export default function BikeSearch() {
                           </div>
                           <div className="min-w-0 flex-1">
                             <Link
-                              href={`/bikes/${geometry.id}`}
+                              href={`/bikes/${definition?.id}`}
                               className="text-sm font-bold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors block truncate"
                             >
                               {definition?.family?.brand_name}{" "}
