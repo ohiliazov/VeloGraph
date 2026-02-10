@@ -1,5 +1,5 @@
 # -------- Builder stage: build deps into a venv --------
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
