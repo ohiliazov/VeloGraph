@@ -20,6 +20,7 @@ class ColorVariant(BaseModel):
 class BikeMeta(BaseModel):
     brand: str
     model: str
+    frame_name: str | None = None
     categories: list[str] = Field(default_factory=list)
     model_year: int | None = None
     wheel_size: str | None = None

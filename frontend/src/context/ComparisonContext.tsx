@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { BikeProduct, Geometry } from "@/types";
+import { BikeProduct } from "@/types";
 
 export interface ComparisonItem {
   product: BikeProduct;
@@ -39,8 +39,8 @@ export const ComparisonProvider: React.FC<{ children: React.ReactNode }> = ({
                 typeof item === "object" &&
                 item.product &&
                 typeof item.product.id === "number" &&
-                item.product.frameset &&
-                typeof item.product.frameset.size_label === "string",
+                item.product.geometry_spec &&
+                typeof item.product.geometry_spec.size_label === "string",
             );
             setComparisonList(validated);
           }

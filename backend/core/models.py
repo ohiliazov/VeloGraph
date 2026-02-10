@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import sqlalchemy as sa
 from pydantic import BaseModel, Field, PositiveInt
-from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -110,27 +112,68 @@ class Base(DeclarativeBase):
     pass
 
 
-class FramesetORM(Base):
-    __tablename__ = "framesets"
+class BikeFamilyORM(Base):
+    __tablename__ = "bike_families"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(nullable=False)
-    material: Mapped[str | None]
-    size_label: Mapped[str] = mapped_column(nullable=False)
+    brand_name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    family_name: Mapped[str] = mapped_column(String(255), nullable=False)  # e.g. "Tarmac", "Grizl"
+    category: Mapped[str] = mapped_column(String(255), nullable=False)  # Road, Gravel, MTB
 
-    stack: Mapped[int] = mapped_column(nullable=False)
-    reach: Mapped[int] = mapped_column(nullable=False)
-    category: Mapped[str] = mapped_column(nullable=False, server_default="other")
-    top_tube_effective_length: Mapped[int] = mapped_column(nullable=False)
-    seat_tube_length: Mapped[int] = mapped_column(nullable=False)
-    head_tube_length: Mapped[int] = mapped_column(nullable=False)
-    chainstay_length: Mapped[int] = mapped_column(nullable=False)
+    # One Family has many Generations/Definitions
+    definitions: Mapped[list[FrameDefinitionORM]] = relationship(back_populates="family", cascade="all, delete-orphan")
+
+    __table_args__ = (UniqueConstraint("brand_name", "family_name", name="_brand_family_uc"),)
+
+
+class FrameDefinitionORM(Base):
+    __tablename__ = "frame_definitions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    family_id: Mapped[int] = mapped_column(ForeignKey("bike_families.id", ondelete="CASCADE"), nullable=False)
+
+    name: Mapped[str] = mapped_column(String(512), nullable=False)  # e.g. "SL8", "Gen 7", "CF SL"
+    year_start: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Useful for "2022-2024" ranges
+    year_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    material: Mapped[str | None] = mapped_column(String(1024), nullable=True)  # Carbon, Alloy
+
+    family: Mapped[BikeFamilyORM] = relationship(back_populates="definitions")
+
+    # One Frame Definition has MANY Geometry Sizes
+    geometries: Mapped[list[GeometrySpecORM]] = relationship(back_populates="definition", cascade="all, delete-orphan")
+
+
+class GeometrySpecORM(Base):
+    __tablename__ = "geometry_specs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    definition_id: Mapped[int] = mapped_column(ForeignKey("frame_definitions.id", ondelete="CASCADE"), nullable=False)
+
+    size_label: Mapped[str] = mapped_column(String(20), nullable=False)  # 54, L, S3
+
+    # --- FIT METRICS (The Searchable Core) ---
+    stack_mm: Mapped[int] = mapped_column(nullable=False, index=True)
+    reach_mm: Mapped[int] = mapped_column(nullable=False, index=True)
+
+    # --- HANDLING METRICS ---
+    top_tube_effective_mm: Mapped[int | None] = mapped_column(nullable=True)
+    seat_tube_length_mm: Mapped[int | None] = mapped_column(nullable=True)
+    head_tube_length_mm: Mapped[int | None] = mapped_column(nullable=True)
     head_tube_angle: Mapped[float] = mapped_column(nullable=False)
     seat_tube_angle: Mapped[float] = mapped_column(nullable=False)
-    bb_drop: Mapped[int] = mapped_column(nullable=False)
-    wheelbase: Mapped[int] = mapped_column(nullable=False)
+    chainstay_length_mm: Mapped[int] = mapped_column(nullable=False)
+    wheelbase_mm: Mapped[int] = mapped_column(nullable=False)
+    bb_drop_mm: Mapped[int] = mapped_column(nullable=False)
 
-    bike_products: Mapped[list[BikeProductORM]] = relationship(back_populates="frameset")
+    # --- ADVANCED GEO (God-Tier Extras) ---
+    fork_offset_mm: Mapped[int | None] = mapped_column(nullable=True)  # Rake
+    trail_mm: Mapped[int | None] = mapped_column(nullable=True)  # Calculated or scraped
+    standover_height_mm: Mapped[int | None] = mapped_column(nullable=True)
+
+    definition: Mapped[FrameDefinitionORM] = relationship(back_populates="geometries")
+    bike_products: Mapped[list[BikeProductORM]] = relationship(back_populates="geometry_spec")
+
+    __table_args__ = (UniqueConstraint("definition_id", "size_label", name="_def_size_uc"),)
 
 
 class BuildKitORM(Base):
@@ -152,9 +195,11 @@ class BikeProductORM(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     sku: Mapped[str] = mapped_column(unique=True, nullable=False)
     colors: Mapped[list[str]] = mapped_column(sa.JSON, nullable=False, server_default="[]")
-    frameset_id: Mapped[int] = mapped_column(ForeignKey("framesets.id"), nullable=False)
-    build_kit_id: Mapped[int] = mapped_column(ForeignKey("build_kits.id"), nullable=False)
+    geometry_spec_id: Mapped[int] = mapped_column(ForeignKey("geometry_specs.id", ondelete="CASCADE"), nullable=False)
+    build_kit_id: Mapped[int] = mapped_column(ForeignKey("build_kits.id", ondelete="CASCADE"), nullable=False)
     source_url: Mapped[str | None] = mapped_column(sa.String(1024))
 
-    frameset: Mapped[FramesetORM] = relationship(back_populates="bike_products")
+    geometry_spec: Mapped[GeometrySpecORM] = relationship(back_populates="bike_products")
     build_kit: Mapped[BuildKitORM] = relationship(back_populates="bike_products")
+
+    __table_args__ = (UniqueConstraint("geometry_spec_id", "build_kit_id", name="_geo_bk_uc"),)

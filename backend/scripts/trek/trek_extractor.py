@@ -35,7 +35,57 @@ class TrekBikeExtractor(BaseBikeExtractor):
         return "Trek"
 
     def _parse_model(self, parser: LexborHTMLParser) -> str:
-        # 1) Try JSON-LD Product data first (usually contains the most concrete model name)
+        # 0) Try user instruction: selected element in "Wybierz swój model"
+        for fs in parser.css("fieldset"):
+            fs_text = fs.text()
+            if "Wybierz swój model" in fs_text or "Wybierz model" in fs_text:
+                checked_model = fs.css_first("input[checked]")
+                if checked_model:
+                    id_val = checked_model.attributes.get("id")
+                    label_node = fs.css_first(f'label[for="{id_val}"]')
+                    if label_node:
+                        txt = label_node.text(strip=True)
+                        if txt:
+                            model_name = html.unescape(txt).strip()
+                            # Clean up common frame variations from model name
+                            model_name = re.sub(
+                                r"\s*\((Stepover|Midstep|Lowstep|Highstep|Stagger|Damski|Męski)\)$",
+                                "",
+                                model_name,
+                                flags=re.I,
+                            )
+                            return model_name
+
+        # 1) Try tech header as a fallback
+        tech_header = parser.css_first('[qaid="tech__product-name-header"]')
+        if tech_header:
+            txt = tech_header.text(strip=True)
+            if txt:
+                model_name = html.unescape(txt).strip()
+                model_name = re.sub(
+                    r"\s*\((Stepover|Midstep|Lowstep|Highstep|Stagger|Damski|Męski)\)$", "", model_name, flags=re.I
+                )
+                return model_name
+
+        # 2) Fallback to general model-option radio
+        model_input = parser.css_first('input[name="model-option"][checked]')
+        if model_input:
+            id_val = model_input.attributes.get("id")
+            if id_val:
+                label_node = parser.css_first(f'label[for="{id_val}"]')
+                if label_node:
+                    txt = label_node.text(strip=True)
+                    if txt:
+                        model_name = html.unescape(txt).strip()
+                        model_name = re.sub(
+                            r"\s*\((Stepover|Midstep|Lowstep|Highstep|Stagger|Damski|Męski)\)$",
+                            "",
+                            model_name,
+                            flags=re.I,
+                        )
+                        return model_name
+
+        # 3) Try JSON-LD Product data first (usually contains the most concrete model name)
         def _try_from_ld(obj: Any) -> str | None:
             try:
                 if isinstance(obj, dict):
@@ -60,17 +110,26 @@ class TrekBikeExtractor(BaseBikeExtractor):
                     else next((_try_from_ld(it) for it in data if _try_from_ld(it)), None)
                 )
                 if res:
-                    return html.unescape(res)
+                    model_name = html.unescape(res).strip()
+                    model_name = re.sub(
+                        r"\s*\((Stepover|Midstep|Lowstep|Highstep|Stagger|Damski|Męski)\)$", "", model_name, flags=re.I
+                    )
+                    return model_name
             except Exception:
                 continue
 
-        # 2) H1 product title candidates (PDP pages)
-        # Prioritize specific qaid if available
+        # 4) H1 product title candidates (PDP pages)
         node = parser.css_first('h1[qaid="pdp-product-title"]')
         if node:
             txt = node.text(strip=True)
             if txt:
-                return html.unescape(txt)
+                model_name = html.unescape(txt).strip()
+                model_name = re.sub(
+                    r"\s*\((Stepover|Midstep|Lowstep|Highstep|Stagger|Damski|Męski)\)$", "", model_name, flags=re.I
+                )
+                return model_name
+
+        return ""
 
         # 3) Check for generic frameset name in URL as a fallback or component
         # e.g. /.../madone/madone-sl/madone-sl-7-gen-8/p/57664/
@@ -97,6 +156,47 @@ class TrekBikeExtractor(BaseBikeExtractor):
                 return html.unescape(last)
 
         return ""
+
+    def _parse_frame_name(self, parser: LexborHTMLParser) -> str | None:
+        # 0) User instruction: div next to "Wybierz rodzaj ramy"
+        for fs in parser.css("fieldset"):
+            fs_text = fs.text()
+            if "Wybierz rodzaj ramy" in fs_text:
+                checked_frame = fs.css_first("input[checked]")
+                if checked_frame:
+                    id_val = checked_frame.attributes.get("id")
+                    label_node = fs.css_first(f'label[for="{id_val}"]')
+                    if label_node:
+                        txt = label_node.text(strip=True)
+                        if txt:
+                            return html.unescape(txt).strip()
+
+        # 1) Extract from technical header if it has parenthesis
+        tech_header = parser.css_first('[qaid="tech__product-name-header"]')
+        if tech_header:
+            txt = tech_header.text(strip=True)
+            m = re.search(r"\((Stepover|Midstep|Lowstep|Highstep|Stagger|Damski|Męski)\)", txt, flags=re.I)
+            if m:
+                return m.group(1).capitalize()
+
+        # 2) Try general sub-family-option radio
+        frame_input = parser.css_first('input[name^="sub-family-option-"][checked]')
+        if frame_input:
+            id_val = frame_input.attributes.get("id")
+            if id_val:
+                label_node = parser.css_first(f'label[for="{id_val}"]')
+                if label_node:
+                    return html.unescape(label_node.text(strip=True)).strip()
+
+        # 3) Extract from title/h1 if it contains frame variation in parentheses
+        node = parser.css_first('h1[qaid="pdp-product-title"]')
+        if node:
+            txt = node.text(strip=True)
+            m = re.search(r"\((Stepover|Midstep|Lowstep|Highstep|Stagger|Damski|Męski)\)", txt, flags=re.I)
+            if m:
+                return m.group(1).capitalize()
+
+        return None
 
     def _parse_source_url(self, parser: LexborHTMLParser) -> str:
         # Prefer canonical link
@@ -129,34 +229,106 @@ class TrekBikeExtractor(BaseBikeExtractor):
         out: list[str] = []
         for link in parser.css('nav[aria-label="Breadcrumb"] a, .breadcrumb a'):
             cat = link.text(strip=True)
-            if cat and cat.lower() not in ["home", "rowery", "sklep"]:
+            if cat and cat.lower() not in ["home", "rowery", "sklep", "diamant"]:
                 out.append(cat)
+        # If no categories from breadcrumbs, try product title keywords
+        if not out:
+            title = parser.css_first("h1")
+            if title:
+                title_txt = title.text(strip=True).lower()
+                if "dziecięcy" in title_txt or "kids" in title_txt:
+                    out.append("Dziecięce")
         return out
 
     def _parse_model_year(self, parser: LexborHTMLParser) -> int | None:
+        # Try to find year in name or tech header
+        full_text = ""
+        tech_header = parser.css_first('[qaid="tech__product-name-header"]')
+        if tech_header:
+            full_text += tech_header.text()
+        h1 = parser.css_first("h1")
+        if h1:
+            full_text += h1.text()
+
+        years = re.findall(r"\b(20\d{2})\b", full_text)
+        if years:
+            return int(years[0])
         return None
 
     def _parse_wheel_size(self, parser: LexborHTMLParser) -> str | None:
+        # Check specs for wheel size
+        dts = parser.css("dt.details-list__title")
+        for dt in dts:
+            dt_text = dt.text(strip=True).lower()
+            if "koło" in dt_text or "opona" in dt_text or "wheel" in dt_text or "tire" in dt_text:
+                dd = dt.next
+                while dd and dd.tag != "dd":
+                    dd = dd.next
+                if dd:
+                    txt = dd.text(strip=True)
+                    m = re.search(r'(\d{2,3})["”c]?', txt)
+                    if m:
+                        return self.normalize_wheel_size(m.group(1))
         return None
 
     def _parse_max_tire_width(self, parser: LexborHTMLParser) -> float | str | None:
         return None
 
     def _parse_material(self, parser: LexborHTMLParser) -> str | None:
-        # Trek specs are in dt/dd pairs. Look for "Rama" (Frame)
+        # 1) Try short spec from configurator
+        for node in parser.css('dd[qaid*="-shortSpecFrame-value"], [qaid="shortSpecFrame-value"]'):
+            mat = self._clean_material(html.unescape(node.text(strip=True)))
+            if mat:
+                return mat
+
+        # 2) Fallback to spec table: Look for "Rama" or "Materiał ramy"
         dts = parser.css("dt.details-list__title")
         for dt in dts:
-            if "Rama" in dt.text():
+            dt_text = dt.text(strip=True)
+            if dt_text in ["Rama", "Materiał ramy", "Frame"]:
                 dd = dt.next
                 while dd and dd.tag != "dd":
                     dd = dd.next
                 if dd:
-                    return dd.text(strip=True)
+                    mat = self._clean_material(dd.text(strip=True))
+                    if mat:
+                        return mat
+
+        # 3) Heuristic: look for Aluminium/Carbon in general spec li/span
+        for node in parser.css("li span.leading-none, .spec-attribute"):
+            txt = node.text(strip=True)
+            if txt in ["Aluminium", "Karbon", "Carbon", "Stal", "Steel"]:
+                return txt
+
         return None
+
+    def _clean_material(self, text: str) -> str:
+        if not text:
+            return ""
+        text = re.sub(r"^(Rama|Materiał ramy|Frame):\s*", "", text, flags=re.I)
+
+        # Prefer short versions if long
+        if ("Aluminum" in text or "Aluminium" in text) and len(text) > 30:
+            return "Aluminum"
+        if ("Carbon" in text or "Karbon" in text or "włókno węglowe" in text) and len(text) > 30:
+            return "Carbon"
+
+        return text.strip()
 
     def _parse_colors(self, parser: LexborHTMLParser) -> list[ColorVariant]:
         out: list[ColorVariant] = []
-        # Use div with class attribute-color as requested
+
+        # 1) Check tech info dropdown for clean color names
+        tech_color_select = parser.css_first("select#tech-info-bike_colorSwatch")
+        if tech_color_select:
+            for opt in tech_color_select.css("option"):
+                color_name = opt.text(strip=True)
+                if color_name:
+                    out.append(ColorVariant(html_path="", color=color_name, url=""))
+            if out:
+                return out
+
+        # 2) Fallback to attribute-color div
         attr_color_div = parser.css_first("div.attribute-color")
         if attr_color_div:
             # The selected color name is often in .variantName
@@ -169,8 +341,6 @@ class TrekBikeExtractor(BaseBikeExtractor):
                 else:
                     color_name = color_text.replace("Kolor", "").strip()
                 if color_name:
-                    # Record current color. We don't have URLs for other variants here,
-                    # but capturing the current one is better than nothing.
                     out.append(ColorVariant(html_path="", color=color_name, url=""))
         return out
 
@@ -178,6 +348,7 @@ class TrekBikeExtractor(BaseBikeExtractor):
         return BikeMeta(
             brand=self._parse_brand(),
             model=self._parse_model(parser),
+            frame_name=self._parse_frame_name(parser),
             categories=self._parse_categories(parser),
             model_year=self._parse_model_year(parser),
             wheel_size=self._parse_wheel_size(parser),

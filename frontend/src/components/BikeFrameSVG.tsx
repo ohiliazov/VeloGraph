@@ -1,10 +1,10 @@
 "use client";
 
 import React from "react";
-import { Frameset } from "@/types";
+import { GeometrySpec } from "@/types";
 
 interface BikeFrameSVGProps {
-  geometry: Frameset;
+  geometry: GeometrySpec;
   wheelSize?: string;
   maxTireWidth?: string;
   className?: string;
@@ -27,7 +27,6 @@ const DEFAULT_JOINTS = {
 
 const DEFAULT_FRAME_COLOR = "#2563eb"; // blue-600
 const WHEEL_COLOR = "#94a3b8"; // slate-400
-const TIRE_COLOR = "#1e293b"; // slate-800
 const FRAME_TUBE_WIDTH = 25;
 const DEFAULT_WHEEL_DIAMETER_MM = 622;
 const DEFAULT_TIRE_WIDTH_MM = 30;
@@ -129,16 +128,19 @@ export default function BikeFrameSVG({
 }: BikeFrameSVGProps) {
   // Inputs
   const {
-    stack,
-    reach,
-    bb_drop,
-    chainstay_length: chainstay,
-    seat_tube_length: seatTube,
+    stack_mm: stack,
+    reach_mm: reach,
+    bb_drop_mm: bb_drop,
+    chainstay_length_mm: chainstay,
+    seat_tube_length_mm: seatTubeRaw,
     seat_tube_angle: seatAngle,
-    head_tube_length: headTube,
+    head_tube_length_mm: headTubeRaw,
     head_tube_angle: headAngle,
-    wheelbase,
+    wheelbase_mm: wheelbase,
   } = geometry;
+
+  const seatTube = seatTubeRaw || 500;
+  const headTube = headTubeRaw || 150;
 
   // Wheel and Tire dimensions
   const wheelDiameter =
@@ -289,7 +291,7 @@ export default function BikeFrameSVG({
             cx={pRear[0]}
             cy={pRear[1]}
             r={wheelR}
-            stroke={TIRE_COLOR}
+            className="stroke-[#1e293b] dark:stroke-[#94a3b8]"
             strokeWidth={tireW}
             fill="none"
           />
@@ -305,7 +307,7 @@ export default function BikeFrameSVG({
             cx={pFront[0]}
             cy={pFront[1]}
             r={wheelR}
-            stroke={TIRE_COLOR}
+            className="stroke-[#1e293b] dark:stroke-[#94a3b8]"
             strokeWidth={tireW}
             fill="none"
           />

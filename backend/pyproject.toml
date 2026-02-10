@@ -17,6 +17,7 @@ dependencies = [
     "selectolax>=0.4.6",
     "sqlalchemy>=2.0.46",
     "svgwrite>=1.4.3",
+    "tenacity>=9.1.4",
     "uvicorn>=0.40.0",
 ]
 readme = "README.md"
@@ -26,5 +27,5 @@ dev = [
     "httpx>=0.28.1",
     "pre-commit>=4.5.1",
     "pytest>=9.0.2",
-    "ruff>=0.14.14",
+    "ruff>=0.15.0",
 ]

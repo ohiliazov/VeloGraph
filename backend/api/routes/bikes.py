@@ -7,13 +7,17 @@ from sqlalchemy.orm import Session, selectinload
 
 from backend.api.schemas import (
     BikeCategory,
+    BikeFamilyCreateSchema,
+    BikeFamilySchema,
     BikeGroupSchema,
     BikeProductCreateSchema,
     BikeProductSchema,
     BuildKitCreateSchema,
     BuildKitSchema,
-    FramesetCreateSchema,
-    FramesetSchema,
+    FrameDefinitionCreateSchema,
+    FrameDefinitionSchema,
+    GeometrySpecCreateSchema,
+    GeometrySpecSchema,
     GroupedSearchResult,
     MaterialGroup,
     SearchResult,
@@ -21,7 +25,7 @@ from backend.api.schemas import (
 from backend.core.constants import BIKE_PRODUCT_INDEX, FRAMESET_GEOMETRY_INDEX
 from backend.core.db import get_db
 from backend.core.elasticsearch import get_es_client
-from backend.core.models import BikeProductORM, BuildKitORM, FramesetORM
+from backend.core.models import BikeFamilyORM, BikeProductORM, BuildKitORM, FrameDefinitionORM, GeometrySpecORM
 from backend.core.utils import get_material_group, group_bike_product
 
 router = APIRouter()
@@ -30,18 +34,20 @@ router = APIRouter()
 def _group_products(products: list[BikeProductORM]) -> list[dict]:
     groups = {}
     for p in products:
-        key = (p.frameset.name, p.frameset.material, p.build_kit_id)
+        definition = p.geometry_spec.definition
+        family = definition.family
+        key = (family.id, definition.id, p.build_kit_id)
         if key not in groups:
             groups[key] = {
-                "frameset_name": p.frameset.name,
-                "material": p.frameset.material,
+                "family": family,
+                "definition": definition,
                 "build_kit": p.build_kit,
                 "products": [],
             }
         groups[key]["products"].append(p)
 
     for group in groups.values():
-        group["products"].sort(key=lambda x: x.frameset.stack)
+        group["products"].sort(key=lambda x: x.geometry_spec.stack_mm)
 
     return list(groups.values())
 
@@ -49,34 +55,53 @@ def _group_products(products: list[BikeProductORM]) -> list[dict]:
 def _find_siblings(db: Session, product: BikeProductORM) -> list[BikeProductORM]:
     sibling_stmt = (
         select(BikeProductORM)
-        .join(BikeProductORM.frameset)
+        .join(BikeProductORM.geometry_spec)
         .where(
-            FramesetORM.name == product.frameset.name,
-            FramesetORM.material == product.frameset.material,
+            GeometrySpecORM.definition_id == product.geometry_spec.definition_id,
             BikeProductORM.build_kit_id == product.build_kit_id,
         )
         .options(
-            selectinload(BikeProductORM.frameset),
+            selectinload(BikeProductORM.geometry_spec)
+            .selectinload(GeometrySpecORM.definition)
+            .selectinload(FrameDefinitionORM.family),
             selectinload(BikeProductORM.build_kit),
         )
-        .order_by(FramesetORM.stack.asc())
+        .order_by(GeometrySpecORM.stack_mm.asc())
     )
     return cast(list[BikeProductORM], db.scalars(sibling_stmt).all())
 
 
-@router.get("/framesets", response_model=list[FramesetSchema])
-def list_framesets(db: Annotated[Session, Depends(get_db)], limit: int = 10):
-    stmt = select(FramesetORM).limit(limit)
+@router.get("/families", response_model=list[BikeFamilySchema])
+def list_families(db: Annotated[Session, Depends(get_db)], limit: int = 10):
+    stmt = select(BikeFamilyORM).limit(limit)
     return db.scalars(stmt).all()
 
 
-@router.post("/framesets", response_model=FramesetSchema)
-def create_frameset(data: FramesetCreateSchema, db: Annotated[Session, Depends(get_db)]):
-    new_fs = FramesetORM(**data.model_dump())
-    db.add(new_fs)
+@router.post("/families", response_model=BikeFamilySchema)
+def create_family(data: BikeFamilyCreateSchema, db: Annotated[Session, Depends(get_db)]):
+    new_family = BikeFamilyORM(**data.model_dump())
+    db.add(new_family)
     db.commit()
-    db.refresh(new_fs)
-    return new_fs
+    db.refresh(new_family)
+    return new_family
+
+
+@router.post("/definitions", response_model=FrameDefinitionSchema)
+def create_definition(data: FrameDefinitionCreateSchema, db: Annotated[Session, Depends(get_db)]):
+    new_def = FrameDefinitionORM(**data.model_dump())
+    db.add(new_def)
+    db.commit()
+    db.refresh(new_def)
+    return new_def
+
+
+@router.post("/geometry-specs", response_model=GeometrySpecSchema)
+def create_geometry_spec(data: GeometrySpecCreateSchema, db: Annotated[Session, Depends(get_db)]):
+    new_spec = GeometrySpecORM(**data.model_dump())
+    db.add(new_spec)
+    db.commit()
+    db.refresh(new_spec)
+    return new_spec
 
 
 @router.post("/build-kits", response_model=BuildKitSchema)
@@ -101,9 +126,9 @@ async def search_geometry(
 ):
     filters = []
     if category:
-        filters.append({"term": {"frameset.category": category.value}})
+        filters.append({"term": {"family.category": category.value}})
     if material:
-        filters.append({"term": {"frameset.material_group": material.value}})
+        filters.append({"term": {"definition.material_group": material.value}})
 
     sort = [
         {
@@ -112,8 +137,8 @@ async def search_geometry(
                 "script": {
                     "lang": "painless",
                     "source": """
-                    double dStack = doc['frameset.stack'].value - params.targetStack;
-                    double dReach = doc['frameset.reach'].value - params.targetReach;
+                    double dStack = doc['geometry_spec.stack_mm'].value - params.targetStack;
+                    double dReach = doc['geometry_spec.reach_mm'].value - params.targetReach;
                     return Math.sqrt(dStack * dStack + dReach * dReach);
                 """,
                     "params": {"targetStack": stack, "targetReach": reach},
@@ -137,7 +162,9 @@ async def search_geometry(
         select(BikeProductORM)
         .where(BikeProductORM.id.in_(product_ids))
         .options(
-            selectinload(BikeProductORM.frameset),
+            selectinload(BikeProductORM.geometry_spec)
+            .selectinload(GeometrySpecORM.definition)
+            .selectinload(FrameDefinitionORM.family),
             selectinload(BikeProductORM.build_kit),
         )
     )
@@ -170,7 +197,13 @@ async def search_keyword(
             {
                 "multi_match": {
                     "query": q,
-                    "fields": ["frameset_name^3", "skus", "build_kit.name", "build_kit.groupset"],
+                    "fields": [
+                        "family.family_name^3",
+                        "definition.name^2",
+                        "skus",
+                        "build_kit.name",
+                        "build_kit.groupset",
+                    ],
                     "fuzziness": "AUTO",
                 }
             }
@@ -180,7 +213,7 @@ async def search_keyword(
     if q:
         sort.append("_score")
     else:
-        sort.append({"frameset_name.keyword": "asc"})
+        sort.append({"family.family_name.keyword": "asc"})
 
     query = {"bool": {"must": must, "filter": filters}}
     from_ = (page - 1) * size
@@ -197,18 +230,20 @@ async def search_keyword(
             select(BikeProductORM)
             .where(BikeProductORM.id.in_(product_ids))
             .options(
-                selectinload(BikeProductORM.frameset),
+                selectinload(BikeProductORM.geometry_spec)
+                .selectinload(GeometrySpecORM.definition)
+                .selectinload(FrameDefinitionORM.family),
                 selectinload(BikeProductORM.build_kit),
             )
         )
         products = cast(list[BikeProductORM], db.scalars(stmt).all())
-        products.sort(key=lambda x: x.frameset.stack)
+        products.sort(key=lambda x: x.geometry_spec.stack_mm)
 
         if products:
             group_items.append(
                 {
-                    "frameset_name": source["frameset_name"],
-                    "material": source["material"],
+                    "family": products[0].geometry_spec.definition.family,
+                    "definition": products[0].geometry_spec.definition,
                     "build_kit": products[0].build_kit,
                     "products": products,
                 }
@@ -223,7 +258,9 @@ def get_bike_product(product_id: int, db: Annotated[Session, Depends(get_db)]):
         select(BikeProductORM)
         .where(BikeProductORM.id == product_id)
         .options(
-            selectinload(BikeProductORM.frameset),
+            selectinload(BikeProductORM.geometry_spec)
+            .selectinload(GeometrySpecORM.definition)
+            .selectinload(FrameDefinitionORM.family),
             selectinload(BikeProductORM.build_kit),
         )
     )
@@ -234,8 +271,8 @@ def get_bike_product(product_id: int, db: Annotated[Session, Depends(get_db)]):
     siblings = _find_siblings(db, product)
 
     return {
-        "frameset_name": product.frameset.name,
-        "material": product.frameset.material,
+        "family": product.geometry_spec.definition.family,
+        "definition": product.geometry_spec.definition,
         "build_kit": product.build_kit,
         "products": siblings,
     }
@@ -256,7 +293,9 @@ async def create_bike_product(
         select(BikeProductORM)
         .where(BikeProductORM.id == new_product.id)
         .options(
-            selectinload(BikeProductORM.frameset),
+            selectinload(BikeProductORM.geometry_spec)
+            .selectinload(GeometrySpecORM.definition)
+            .selectinload(FrameDefinitionORM.family),
             selectinload(BikeProductORM.build_kit),
         )
     )
@@ -273,14 +312,20 @@ async def sync_product_to_es(product: BikeProductORM, es: AsyncElasticsearch, db
         "sku": product.sku,
         "colors": product.colors,
         "source_url": product.source_url,
-        "frameset": {
-            "name": product.frameset.name,
-            "material": product.frameset.material,
-            "material_group": get_material_group(product.frameset.material),
-            "size_label": product.frameset.size_label,
-            "category": product.frameset.category,
-            "stack": product.frameset.stack,
-            "reach": product.frameset.reach,
+        "geometry_spec": {
+            "size_label": product.geometry_spec.size_label,
+            "stack_mm": product.geometry_spec.stack_mm,
+            "reach_mm": product.geometry_spec.reach_mm,
+        },
+        "definition": {
+            "name": product.geometry_spec.definition.name,
+            "material": product.geometry_spec.definition.material,
+            "material_group": get_material_group(product.geometry_spec.definition.material),
+        },
+        "family": {
+            "brand_name": product.geometry_spec.definition.family.brand_name,
+            "family_name": product.geometry_spec.definition.family.family_name,
+            "category": product.geometry_spec.definition.family.category,
         },
         "build_kit": {
             "name": product.build_kit.name,
@@ -292,7 +337,15 @@ async def sync_product_to_es(product: BikeProductORM, es: AsyncElasticsearch, db
 
     siblings = _find_siblings(db, product)
 
-    group_id = f"{product.frameset.name}-{product.frameset.material}-{product.build_kit_id}".replace(" ", "-").lower()
+    group_id = (
+        (
+            f"{product.geometry_spec.definition.family.family_name}-"
+            f"{product.geometry_spec.definition.name}-"
+            f"{product.build_kit_id}"
+        )
+        .replace(" ", "-")
+        .lower()
+    )
     group_doc = group_bike_product(product, siblings)
     await es.index(index=BIKE_PRODUCT_INDEX, id=group_id, document=group_doc, refresh=True)
 
@@ -313,7 +366,15 @@ async def delete_bike_product(
 
     await es.delete(index=FRAMESET_GEOMETRY_INDEX, id=str(product_id), ignore=[404], refresh=True)
 
-    group_id = f"{product.frameset.name}-{product.frameset.material}-{product.build_kit_id}".replace(" ", "-").lower()
+    group_id = (
+        (
+            f"{product.geometry_spec.definition.family.family_name}-"
+            f"{product.geometry_spec.definition.name}-"
+            f"{product.build_kit_id}"
+        )
+        .replace(" ", "-")
+        .lower()
+    )
 
     siblings = _find_siblings(db, product)
 

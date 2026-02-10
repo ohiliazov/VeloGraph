@@ -6,11 +6,14 @@ from sqlalchemy.orm import selectinload
 from backend.config import es_settings
 from backend.core.constants import BIKE_PRODUCT_INDEX, FRAMESET_GEOMETRY_INDEX
 from backend.core.db import SessionLocal
-from backend.core.models import BikeProductORM
+from backend.core.models import BikeProductORM, FrameDefinitionORM, GeometrySpecORM
 from backend.core.utils import get_material_group, group_bike_product
 
 
 def serialize_bike(product: BikeProductORM) -> dict:
+    spec = product.geometry_spec
+    definition = spec.definition
+    family = definition.family
     return {
         "_index": FRAMESET_GEOMETRY_INDEX,
         "_id": product.id,
@@ -19,14 +22,20 @@ def serialize_bike(product: BikeProductORM) -> dict:
             "sku": product.sku,
             "colors": product.colors,
             "source_url": product.source_url,
-            "frameset": {
-                "name": product.frameset.name,
-                "material": product.frameset.material,
-                "material_group": get_material_group(product.frameset.material),
-                "size_label": product.frameset.size_label,
-                "category": product.frameset.category,
-                "stack": product.frameset.stack,
-                "reach": product.frameset.reach,
+            "geometry_spec": {
+                "size_label": spec.size_label,
+                "stack_mm": spec.stack_mm,
+                "reach_mm": spec.reach_mm,
+            },
+            "definition": {
+                "name": definition.name,
+                "material": definition.material,
+                "material_group": get_material_group(definition.material),
+            },
+            "family": {
+                "brand_name": family.brand_name,
+                "family_name": family.family_name,
+                "category": family.category,
             },
             "build_kit": {
                 "name": product.build_kit.name,
@@ -41,7 +50,9 @@ def serialize_bike(product: BikeProductORM) -> dict:
 
 def serialize_group(group_key: tuple, products: list[BikeProductORM]) -> dict:
     rep = products[0]
-    group_id = f"{rep.frameset.name}-{rep.frameset.material}-{rep.build_kit_id}".replace(" ", "-").lower()
+    definition = rep.geometry_spec.definition
+    family = definition.family
+    group_id = f"{family.family_name}-{definition.name}-{rep.build_kit_id}".replace(" ", "-").lower()
 
     return {
         "_index": BIKE_PRODUCT_INDEX,
@@ -57,15 +68,25 @@ def create_index(es, index_name: str = FRAMESET_GEOMETRY_INDEX):
                 "sku": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
                 "colors": {"type": "keyword"},
                 "source_url": {"type": "keyword", "index": False},
-                "frameset": {
+                "geometry_spec": {
+                    "properties": {
+                        "size_label": {"type": "keyword"},
+                        "stack_mm": {"type": "integer"},
+                        "reach_mm": {"type": "integer"},
+                    }
+                },
+                "definition": {
                     "properties": {
                         "name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
                         "material": {"type": "keyword"},
                         "material_group": {"type": "keyword"},
-                        "size_label": {"type": "keyword"},
+                    }
+                },
+                "family": {
+                    "properties": {
+                        "brand_name": {"type": "keyword"},
+                        "family_name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
                         "category": {"type": "keyword"},
-                        "stack": {"type": "integer"},
-                        "reach": {"type": "integer"},
                     }
                 },
                 "build_kit": {
@@ -93,10 +114,20 @@ def create_group_index(es, index_name: str = BIKE_PRODUCT_INDEX):
     mapping = {
         "mappings": {
             "properties": {
-                "frameset_name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
-                "material": {"type": "keyword"},
-                "material_group": {"type": "keyword"},
-                "category": {"type": "keyword"},
+                "family": {
+                    "properties": {
+                        "brand_name": {"type": "keyword"},
+                        "family_name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+                        "category": {"type": "keyword"},
+                    }
+                },
+                "definition": {
+                    "properties": {
+                        "name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+                        "material": {"type": "keyword"},
+                        "material_group": {"type": "keyword"},
+                    }
+                },
                 "skus": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
                 "product_ids": {"type": "integer", "index": False},
                 "sizes": {"type": "keyword", "index": False},
@@ -125,7 +156,9 @@ def populate_index(es, session):
     logger.info("🔍 Fetching bike products from PostgreSQL...")
 
     stmt = select(BikeProductORM).options(
-        selectinload(BikeProductORM.frameset),
+        selectinload(BikeProductORM.geometry_spec)
+        .selectinload(GeometrySpecORM.definition)
+        .selectinload(FrameDefinitionORM.family),
         selectinload(BikeProductORM.build_kit),
     )
 
@@ -134,7 +167,9 @@ def populate_index(es, session):
 
     groups = {}
     for p in products:
-        key = (p.frameset.name, p.frameset.material, p.build_kit_id)
+        definition = p.geometry_spec.definition
+        family = definition.family
+        key = (family.id, definition.id, p.build_kit_id)
         if key not in groups:
             groups[key] = []
         groups[key].append(p)

@@ -80,27 +80,30 @@ export default function BikeEditPage() {
     );
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12">
+    <div className="min-h-screen bg-gray-50 dark:bg-black py-12">
       <div className="max-w-4xl mx-auto px-6">
         <div className="flex justify-between items-center mb-8">
-          <Link href={`/bikes/${id}`} className="text-blue-600 hover:underline">
+          <Link
+            href={`/bikes/${id}`}
+            className="text-blue-600 dark:text-blue-400 hover:underline"
+          >
             ← {t.ui.back_to_details}
           </Link>
           <LanguageSwitcher />
         </div>
 
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
           {t.ui.edit} {bike.brand} {bike.model_name}
         </h1>
 
         <form onSubmit={handleSave} className="space-y-8">
-          <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4">
-            <h2 className="text-xl font-semibold text-gray-800 border-b pb-2">
+          <section className="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm space-y-4">
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 border-b dark:border-gray-800 pb-2">
               {t.ui.metadata}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t.ui.brand}
                 </label>
                 <input
@@ -108,12 +111,12 @@ export default function BikeEditPage() {
                   name="brand"
                   value={bike.brand}
                   onChange={handleInputChange}
-                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                   required
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t.ui.model}
                 </label>
                 <input
@@ -121,12 +124,12 @@ export default function BikeEditPage() {
                   name="model_name"
                   value={bike.model_name}
                   onChange={handleInputChange}
-                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                   required
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t.ui.year}
                 </label>
                 <input
@@ -134,11 +137,11 @@ export default function BikeEditPage() {
                   name="model_year"
                   value={bike.model_year || ""}
                   onChange={handleInputChange}
-                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t.geometry.colors}
                 </label>
                 <input
@@ -146,11 +149,11 @@ export default function BikeEditPage() {
                   name="color"
                   value={bike.color || ""}
                   onChange={handleInputChange}
-                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t.ui.material}
                 </label>
                 <input
@@ -158,11 +161,11 @@ export default function BikeEditPage() {
                   name="frame_material"
                   value={bike.frame_material || ""}
                   onChange={handleInputChange}
-                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t.ui.wheel_size}
                 </label>
                 <input
@@ -170,11 +173,11 @@ export default function BikeEditPage() {
                   name="wheel_size"
                   value={bike.wheel_size || ""}
                   onChange={handleInputChange}
-                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t.ui.brake_type}
                 </label>
                 <input
@@ -182,11 +185,11 @@ export default function BikeEditPage() {
                   name="brake_type"
                   value={bike.brake_type || ""}
                   onChange={handleInputChange}
-                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t.ui.categories_comma_hint}
                 </label>
                 <input
@@ -201,11 +204,11 @@ export default function BikeEditPage() {
                       .filter((c) => c !== "");
                     setBike({ ...bike, categories: cats });
                   }}
-                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t.ui.source_page} (URL)
                 </label>
                 <input
@@ -213,12 +216,12 @@ export default function BikeEditPage() {
                   name="source_url"
                   value={bike.source_url || ""}
                   onChange={handleInputChange}
-                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                   placeholder="https://..."
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t.ui.max_tire_width} (mm)
                 </label>
                 <input
@@ -226,36 +229,36 @@ export default function BikeEditPage() {
                   name="max_tire_width"
                   value={bike.max_tire_width || ""}
                   onChange={handleInputChange}
-                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                   placeholder="e.g. 45"
                 />
               </div>
             </div>
           </section>
 
-          <section className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-4 overflow-x-auto">
-            <h2 className="text-xl font-semibold text-gray-800 border-b pb-2">
+          <section className="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm space-y-4 overflow-x-auto">
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 border-b dark:border-gray-800 pb-2">
               {t.ui.geometries}
             </h2>
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="text-gray-500 border-b">
+                <tr className="text-gray-500 dark:text-gray-400 border-b dark:border-gray-800">
                   <th className="py-2 px-1 text-left">
                     {t.geometry.size_label}
                   </th>
-                  <th className="py-2 px-1 text-left">{t.geometry.stack}</th>
-                  <th className="py-2 px-1 text-left">{t.geometry.reach}</th>
+                  <th className="py-2 px-1 text-left">{t.geometry.stack_mm}</th>
+                  <th className="py-2 px-1 text-left">{t.geometry.reach_mm}</th>
                   <th className="py-2 px-1 text-left">
-                    {t.geometry.top_tube_effective_length}
+                    {t.geometry.top_tube_effective_mm}
                   </th>
                   <th className="py-2 px-1 text-left">
-                    {t.geometry.seat_tube_length}
+                    {t.geometry.seat_tube_length_mm}
                   </th>
                   <th className="py-2 px-1 text-left">
-                    {t.geometry.head_tube_length}
+                    {t.geometry.head_tube_length_mm}
                   </th>
                   <th className="py-2 px-1 text-left">
-                    {t.geometry.chainstay_length}
+                    {t.geometry.chainstay_length_mm}
                   </th>
                   <th className="py-2 px-1 text-left">
                     {t.geometry.head_tube_angle}
@@ -263,13 +266,15 @@ export default function BikeEditPage() {
                   <th className="py-2 px-1 text-left">
                     {t.geometry.seat_tube_angle}
                   </th>
-                  <th className="py-2 px-1 text-left">{t.geometry.bb_drop}</th>
                   <th className="py-2 px-1 text-left">
-                    {t.geometry.wheelbase}
+                    {t.geometry.bb_drop_mm}
+                  </th>
+                  <th className="py-2 px-1 text-left">
+                    {t.geometry.wheelbase_mm}
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {bike.geometries.map((geo, index) => (
                   <tr key={index}>
                     <td className="py-2 px-1">
@@ -283,7 +288,7 @@ export default function BikeEditPage() {
                             e.target.value,
                           )
                         }
-                        className="w-16 p-1 border rounded"
+                        className="w-16 p-1 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded dark:text-white"
                       />
                     </td>
                     <td className="py-2 px-1">
@@ -297,7 +302,7 @@ export default function BikeEditPage() {
                             parseInt(e.target.value) || 0,
                           )
                         }
-                        className="w-16 p-1 border rounded"
+                        className="w-16 p-1 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded dark:text-white"
                       />
                     </td>
                     <td className="py-2 px-1">
@@ -311,7 +316,7 @@ export default function BikeEditPage() {
                             parseInt(e.target.value) || 0,
                           )
                         }
-                        className="w-16 p-1 border rounded"
+                        className="w-16 p-1 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded dark:text-white"
                       />
                     </td>
                     <td className="py-2 px-1">
@@ -437,7 +442,7 @@ export default function BikeEditPage() {
           <div className="flex justify-end gap-4">
             <Link
               href={`/bikes/${id}`}
-              className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors"
+              className="px-6 py-2 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
             >
               {t.ui.cancel}
             </Link>

@@ -1,47 +1,64 @@
-from backend.api.schemas import BikeProductSchema, FramesetSchema
+from backend.api.schemas import BikeProductSchema, GeometrySpecExtendedSchema
 
 
-def test_frameset_schema_valid():
+def test_geometry_spec_schema_valid():
     data = {
         "id": 1,
-        "name": "Esker",
-        "material": "Carbon",
+        "definition_id": 1,
         "size_label": "M",
-        "stack": 580,
-        "reach": 380,
-        "top_tube_effective_length": 550,
-        "seat_tube_length": 520,
-        "head_tube_length": 150,
-        "chainstay_length": 430,
+        "stack_mm": 580,
+        "reach_mm": 380,
+        "top_tube_effective_mm": 550,
+        "seat_tube_length_mm": 520,
+        "head_tube_length_mm": 150,
+        "chainstay_length_mm": 430,
         "head_tube_angle": 71.0,
         "seat_tube_angle": 73.5,
-        "bb_drop": 70,
-        "wheelbase": 1020,
+        "bb_drop_mm": 70,
+        "wheelbase_mm": 1020,
+        "definition": {
+            "id": 1,
+            "family_id": 1,
+            "name": "Esker",
+            "material": "Carbon",
+            "family": {"id": 1, "brand_name": "Kross", "family_name": "Esker", "category": "gravel"},
+        },
     }
-    fs = FramesetSchema(**data)
-    assert fs.name == "Esker"
-    assert fs.stack == 580
+    gs = GeometrySpecExtendedSchema(**data)
+    assert gs.definition.name == "Esker"
+    assert gs.stack_mm == 580
 
 
 def test_bike_product_schema_valid():
     data = {
         "id": 1,
         "sku": "ESKER-6.0-2023",
-        "frameset": {
+        "geometry_spec": {
             "id": 1,
-            "name": "Esker",
-            "material": "Carbon",
+            "definition_id": 1,
             "size_label": "M",
-            "stack": 580,
-            "reach": 380,
-            "top_tube_effective_length": 550,
-            "seat_tube_length": 520,
-            "head_tube_length": 150,
-            "chainstay_length": 430,
+            "stack_mm": 580,
+            "reach_mm": 380,
+            "top_tube_effective_mm": 550,
+            "seat_tube_length_mm": 520,
+            "head_tube_length_mm": 150,
+            "chainstay_length_mm": 430,
             "head_tube_angle": 71.0,
             "seat_tube_angle": 73.5,
-            "bb_drop": 70,
-            "wheelbase": 1020,
+            "bb_drop_mm": 70,
+            "wheelbase_mm": 1020,
+            "definition": {
+                "id": 1,
+                "family_id": 1,
+                "name": "Esker",
+                "material": "Carbon",
+                "family": {
+                    "id": 1,
+                    "brand_name": "Kross",
+                    "family_name": "Esker",
+                    "category": "gravel",
+                },
+            },
         },
         "build_kit": {
             "id": 1,
@@ -54,5 +71,5 @@ def test_bike_product_schema_valid():
     }
     product = BikeProductSchema(**data)
     assert product.sku == "ESKER-6.0-2023"
-    assert product.frameset.name == "Esker"
+    assert product.geometry_spec.definition.name == "Esker"
     assert product.build_kit.groupset == "Shimano GRX"

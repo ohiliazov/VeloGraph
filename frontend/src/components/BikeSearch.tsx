@@ -85,7 +85,7 @@ export default function BikeSearch() {
         // Initialize size selection for groups
         const initialSelection: Record<string, number> = {};
         data.items?.forEach((group) => {
-          const groupKey = `${group.frameset_name}-${group.build_kit.id}`;
+          const groupKey = `${group.family.family_name}-${group.definition.name}-${group.build_kit.id}`;
           if (group.products.length > 0) {
             initialSelection[groupKey] = group.products[0].id;
           }
@@ -157,7 +157,7 @@ export default function BikeSearch() {
 
   return (
     <div className="w-full max-w-5xl mx-auto p-4 md:p-6 space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/80 backdrop-blur-md p-4 rounded-2xl border border-gray-200 shadow-sm sticky top-4 z-30">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md p-4 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm sticky top-4 z-30">
         <div className="flex items-center gap-3">
           <div className="bg-blue-600 p-2 rounded-lg text-white">
             <svg
@@ -175,10 +175,10 @@ export default function BikeSearch() {
             </svg>
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900 leading-tight">
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white leading-tight">
               Bike Search
             </h1>
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">
+            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">
               {total} {t.ui.results_found}
             </p>
           </div>
@@ -228,7 +228,7 @@ export default function BikeSearch() {
         </div>
       </div>
 
-      <div className="flex p-1 bg-gray-100 rounded-2xl w-fit mx-auto md:mx-0">
+      <div className="flex p-1 bg-gray-100 dark:bg-gray-800 rounded-2xl w-fit mx-auto md:mx-0">
         <button
           type="button"
           onClick={() => {
@@ -237,8 +237,8 @@ export default function BikeSearch() {
           }}
           className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${
             activeTab === "geometry"
-              ? "bg-white text-blue-600 shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
+              ? "bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm"
+              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
           }`}
         >
           {t.ui.geometry_tab}
@@ -251,8 +251,8 @@ export default function BikeSearch() {
           }}
           className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${
             activeTab === "keyword"
-              ? "bg-white text-blue-600 shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
+              ? "bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm"
+              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
           }`}
         >
           {t.ui.keyword_tab}
@@ -261,11 +261,11 @@ export default function BikeSearch() {
 
       <form
         onSubmit={handleSearch}
-        className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-white p-5 rounded-2xl border border-gray-200 shadow-sm"
+        className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm"
       >
         {activeTab === "keyword" && (
           <div className="col-span-2 space-y-1.5">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">
+            <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1">
               {t.ui.brand} / {t.ui.model}
             </label>
             <div className="relative">
@@ -277,7 +277,7 @@ export default function BikeSearch() {
                   setPage(1);
                 }}
                 placeholder={t.ui.search_placeholder}
-                className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all"
+                className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all dark:text-white"
               />
               <svg
                 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
@@ -296,7 +296,7 @@ export default function BikeSearch() {
           </div>
         )}
         <div className="space-y-1.5">
-          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">
+          <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1">
             {t.ui.category}
           </label>
           <select
@@ -305,7 +305,7 @@ export default function BikeSearch() {
               setCategory(e.target.value);
               setPage(1);
             }}
-            className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all appearance-none cursor-pointer"
+            className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all appearance-none cursor-pointer dark:text-white"
           >
             <option value="">{t.categories.all_categories}</option>
             {Object.values(BikeCategory).map((value) => (
@@ -316,7 +316,7 @@ export default function BikeSearch() {
           </select>
         </div>
         <div className="space-y-1.5">
-          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">
+          <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1">
             {t.ui.material}
           </label>
           <select
@@ -325,7 +325,7 @@ export default function BikeSearch() {
               setMaterial(e.target.value);
               setPage(1);
             }}
-            className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all appearance-none cursor-pointer"
+            className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all appearance-none cursor-pointer dark:text-white"
           >
             <option value="">{t.ui.all_materials}</option>
             {Object.values(MaterialGroup).map((value) => (
@@ -339,7 +339,7 @@ export default function BikeSearch() {
         {activeTab === "geometry" && (
           <>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">
+              <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1">
                 {t.ui.stack_target}
               </label>
               <div className="relative">
@@ -351,7 +351,7 @@ export default function BikeSearch() {
                     setPage(1);
                   }}
                   placeholder="e.g. 580"
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all"
+                  className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all dark:text-white"
                   required
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 uppercase">
@@ -360,7 +360,7 @@ export default function BikeSearch() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">
+              <label className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest px-1">
                 {t.ui.reach_target}
               </label>
               <div className="relative">
@@ -372,7 +372,7 @@ export default function BikeSearch() {
                     setPage(1);
                   }}
                   placeholder="e.g. 400"
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all"
+                  className="w-full p-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-sm transition-all dark:text-white"
                   required
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 uppercase">
@@ -385,11 +385,11 @@ export default function BikeSearch() {
       </form>
 
       {total > 10 && (
-        <div className="flex justify-center items-center gap-4 bg-white py-2 px-4 rounded-xl border border-gray-200 shadow-sm w-fit mx-auto">
+        <div className="flex justify-center items-center gap-4 bg-white dark:bg-gray-900 py-2 px-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm w-fit mx-auto">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg disabled:opacity-30 disabled:hover:bg-transparent transition-all"
+            className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg disabled:opacity-30 disabled:hover:bg-transparent transition-all"
           >
             <svg
               className="w-5 h-5"
@@ -406,15 +406,17 @@ export default function BikeSearch() {
             </svg>
           </button>
           <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+            <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
               Page
             </span>
-            <span className="text-sm font-bold text-blue-600">{page}</span>
+            <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+              {page}
+            </span>
           </div>
           <button
             onClick={() => setPage((p) => p + 1)}
             disabled={results.length < 10}
-            className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg disabled:opacity-30 disabled:hover:bg-transparent transition-all"
+            className="p-1.5 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg disabled:opacity-30 disabled:hover:bg-transparent transition-all"
           >
             <svg
               className="w-5 h-5"
@@ -434,37 +436,39 @@ export default function BikeSearch() {
       )}
 
       {loading ? (
-        <div className="text-center py-10">{t.ui.loading}</div>
+        <div className="text-center py-10 dark:text-gray-400">
+          {t.ui.loading}
+        </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 table-fixed">
-              <thead className="bg-gray-50/50">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800 table-fixed">
+              <thead className="bg-gray-50/50 dark:bg-gray-800/50">
                 <tr>
-                  <th className="w-[32%] px-6 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                  <th className="w-[32%] px-6 py-4 text-left text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     {t.ui.brand} / {t.ui.model}
                   </th>
-                  <th className="w-[12%] px-4 py-4 text-center text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                  <th className="w-[12%] px-4 py-4 text-center text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     {t.geometry.size_label}
                   </th>
-                  <th className="w-[16%] px-4 py-4 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                  <th className="w-[16%] px-4 py-4 text-left text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Geometry (S/R)
                   </th>
                   {activeTab === "geometry" && (
-                    <th className="w-[25%] px-6 py-4 text-center text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                    <th className="w-[25%] px-6 py-4 text-center text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Target Fit
                     </th>
                   )}
-                  <th className="w-[15%] px-6 py-4 text-right text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                  <th className="w-[15%] px-6 py-4 text-right text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     {t.ui.actions || "Actions"}
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 bg-white">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
                 {results.map((item) => {
                   const isGroup = "products" in item;
                   const groupKey = isGroup
-                    ? `${item.frameset_name}-${item.build_kit.id}`
+                    ? `${item.family.family_name}-${item.definition.name}-${item.build_kit.id}`
                     : "";
                   const selectedId = isGroup
                     ? selectedProductIds[groupKey] || item.products[0]?.id
@@ -477,8 +481,8 @@ export default function BikeSearch() {
                   if (!product) return null;
 
                   const isProductInComparison = isInComparison(product.id);
-                  const sDiff = product.frameset.stack - Number(stack);
-                  const rDiff = product.frameset.reach - Number(reach);
+                  const sDiff = product.geometry_spec.stack_mm - Number(stack);
+                  const rDiff = product.geometry_spec.reach_mm - Number(reach);
 
                   // Visualization range based on average size differences
                   const RANGE = 20;
@@ -508,28 +512,39 @@ export default function BikeSearch() {
                   return (
                     <tr
                       key={isGroup ? groupKey : product.id}
-                      className="group hover:bg-blue-50/40 transition-all duration-200"
+                      className="group hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-all duration-200"
                     >
                       <td className="px-6 py-5">
                         <div className="flex items-center gap-4">
-                          <div className="flex-shrink-0 h-14 w-20 bg-gray-50 rounded-xl flex items-center justify-center p-2 group-hover:bg-white transition-all border border-gray-100 group-hover:border-blue-100 group-hover:shadow-sm">
+                          <div className="flex-shrink-0 h-14 w-20 bg-gray-50 dark:bg-gray-800 rounded-xl flex items-center justify-center p-2 group-hover:bg-white dark:group-hover:bg-gray-700 transition-all border border-gray-100 dark:border-gray-700 group-hover:border-blue-100 dark:group-hover:border-blue-900 group-hover:shadow-sm">
                             <BikeFrameSVG
-                              geometry={product.frameset}
+                              geometry={product.geometry_spec}
                               height={44}
                             />
                           </div>
                           <div className="min-w-0 flex-1">
                             <Link
                               href={`/bikes/${product.id}`}
-                              className="text-sm font-bold text-gray-900 hover:text-blue-600 transition-colors block truncate"
+                              className="text-sm font-bold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors block truncate"
                             >
-                              {product.frameset.name}
+                              {
+                                product.geometry_spec.definition?.family
+                                  ?.brand_name
+                              }{" "}
+                              {
+                                product.geometry_spec.definition?.family
+                                  ?.family_name
+                              }
                             </Link>
                             <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                              <span className="text-[10px] font-extrabold text-blue-500 bg-blue-50/50 px-2 py-0.5 rounded-md uppercase tracking-wider border border-blue-100/50">
-                                {product.frameset.material || "N/A"}
+                              <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">
+                                {product.geometry_spec.definition?.name}
                               </span>
-                              <span className="text-[10px] font-medium text-gray-400 truncate max-w-[120px]">
+                              <span className="text-[10px] font-extrabold text-blue-500 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/30 px-2 py-0.5 rounded-md uppercase tracking-wider border border-blue-100/50 dark:border-blue-900/50">
+                                {product.geometry_spec.definition?.material ||
+                                  "N/A"}
+                              </span>
+                              <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 truncate max-w-[120px]">
                                 {product.build_kit.name}
                               </span>
                             </div>
@@ -551,40 +566,40 @@ export default function BikeSearch() {
                                 className={`min-w-[32px] px-1.5 py-0.5 text-[10px] font-bold rounded-md transition-all ${
                                   selectedId === p.id
                                     ? "bg-blue-600 text-white shadow-sm ring-2 ring-blue-600/20 scale-105"
-                                    : "bg-gray-50 text-gray-500 hover:bg-gray-200 hover:text-gray-700 border border-gray-200"
+                                    : "bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-200 border border-gray-200 dark:border-gray-700"
                                 }`}
                               >
-                                {p.frameset.size_label}
+                                {p.geometry_spec.size_label}
                               </button>
                             ))}
                           </div>
                         ) : (
-                          <span className="inline-flex items-center justify-center min-w-[32px] px-2 py-1 text-[11px] font-black rounded-lg bg-gray-900 text-white shadow-sm">
-                            {product.frameset.size_label}
+                          <span className="inline-flex items-center justify-center min-w-[32px] px-2 py-1 text-[11px] font-black rounded-lg bg-gray-900 dark:bg-gray-700 text-white shadow-sm">
+                            {product.geometry_spec.size_label}
                           </span>
                         )}
                       </td>
                       <td className="px-6 py-5 whitespace-nowrap">
                         <div className="flex flex-col gap-1.5">
                           <div className="flex items-center gap-2">
-                            <span className="w-3 text-[10px] font-black text-gray-300">
+                            <span className="w-3 text-[10px] font-black text-gray-300 dark:text-gray-600">
                               S
                             </span>
-                            <span className="text-sm font-bold text-gray-800 tabular-nums">
-                              {product.frameset.stack}
+                            <span className="text-sm font-bold text-gray-800 dark:text-gray-200 tabular-nums">
+                              {product.geometry_spec.stack_mm}
                             </span>
-                            <span className="text-[10px] text-gray-400 font-medium">
+                            <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
                               mm
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="w-3 text-[10px] font-black text-gray-300">
+                            <span className="w-3 text-[10px] font-black text-gray-300 dark:text-gray-600">
                               R
                             </span>
-                            <span className="text-sm font-bold text-gray-800 tabular-nums">
-                              {product.frameset.reach}
+                            <span className="text-sm font-bold text-gray-800 dark:text-gray-200 tabular-nums">
+                              {product.geometry_spec.reach_mm}
                             </span>
-                            <span className="text-[10px] text-gray-400 font-medium">
+                            <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
                               mm
                             </span>
                           </div>
@@ -622,7 +637,7 @@ export default function BikeSearch() {
                                   </span>
                                 </div>
                                 <div className="relative py-1">
-                                  <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden border border-gray-200/50 shadow-inner">
+                                  <div className="relative h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden border border-gray-200/50 dark:border-gray-700 shadow-inner">
                                     <div
                                       className="absolute inset-0"
                                       style={{
@@ -630,10 +645,10 @@ export default function BikeSearch() {
                                           "linear-gradient(to right, #ef4444 0%, #f59e0b 25%, #22c55e 37.5%, #3b82f6 45%, #a855f7 50%, #3b82f6 55%, #22c55e 62.5%, #f59e0b 75%, #ef4444 100%)",
                                       }}
                                     />
-                                    <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/40 z-10" />
+                                    <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/40 dark:bg-gray-900/40 z-10" />
                                   </div>
                                   <div
-                                    className="absolute top-1/2 w-0.5 h-4 bg-gray-950 z-20 transition-all duration-700 ease-out rounded-full shadow-[0_0_2px_rgba(255,255,255,0.8)]"
+                                    className="absolute top-1/2 w-0.5 h-4 bg-gray-950 dark:bg-white z-20 transition-all duration-700 ease-out rounded-full shadow-[0_0_2px_rgba(255,255,255,0.8)]"
                                     style={{
                                       left: `${getPosition(sDiff)}%`,
                                       transform: "translate(-50%, -50%)",
@@ -680,7 +695,7 @@ export default function BikeSearch() {
                                   </span>
                                 </div>
                                 <div className="relative py-1">
-                                  <div className="relative h-2 bg-gray-100 rounded-full overflow-hidden border border-gray-200/50 shadow-inner">
+                                  <div className="relative h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden border border-gray-200/50 dark:border-gray-700 shadow-inner">
                                     <div
                                       className="absolute inset-0"
                                       style={{
@@ -688,10 +703,10 @@ export default function BikeSearch() {
                                           "linear-gradient(to right, #ef4444 0%, #f59e0b 25%, #22c55e 37.5%, #3b82f6 45%, #a855f7 50%, #3b82f6 55%, #22c55e 62.5%, #f59e0b 75%, #ef4444 100%)",
                                       }}
                                     />
-                                    <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/40 z-10" />
+                                    <div className="absolute left-1/2 top-0 bottom-0 w-px bg-white/40 dark:bg-gray-900/40 z-10" />
                                   </div>
                                   <div
-                                    className="absolute top-1/2 w-0.5 h-4 bg-gray-950 z-20 transition-all duration-700 ease-out rounded-full shadow-[0_0_2px_rgba(255,255,255,0.8)]"
+                                    className="absolute top-1/2 w-0.5 h-4 bg-gray-950 dark:bg-white z-20 transition-all duration-700 ease-out rounded-full shadow-[0_0_2px_rgba(255,255,255,0.8)]"
                                     style={{
                                       left: `${getPosition(rDiff)}%`,
                                       transform: "translate(-50%, -50%)",
@@ -724,8 +739,8 @@ export default function BikeSearch() {
                             }
                             className={`flex items-center justify-center w-9 h-9 rounded-xl transition-all ${
                               isProductInComparison
-                                ? "bg-red-50 text-red-600 hover:bg-red-100 shadow-inner"
-                                : "bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white hover:shadow-lg hover:-translate-y-0.5"
+                                ? "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 shadow-inner"
+                                : "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-600 dark:hover:bg-blue-500 hover:text-white dark:hover:text-white hover:shadow-lg hover:-translate-y-0.5"
                             }`}
                             title={
                               isProductInComparison
@@ -754,7 +769,7 @@ export default function BikeSearch() {
 
                           <Link
                             href={`/bikes/${product.id}`}
-                            className="flex items-center justify-center w-9 h-9 bg-gray-50 text-gray-400 rounded-xl hover:bg-white hover:text-gray-900 transition-all border border-transparent hover:border-gray-200 hover:shadow-sm"
+                            className="flex items-center justify-center w-9 h-9 bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 rounded-xl hover:bg-white dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-600 hover:shadow-sm"
                             title="View Details"
                           >
                             <svg
@@ -777,7 +792,7 @@ export default function BikeSearch() {
                               href={product.source_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex items-center justify-center w-9 h-9 bg-gray-50 text-gray-400 rounded-xl hover:bg-white hover:text-blue-600 transition-all border border-transparent hover:border-gray-200 hover:shadow-sm"
+                              className="flex items-center justify-center w-9 h-9 bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 rounded-xl hover:bg-white dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-600 hover:shadow-sm"
                               title={t.ui.source_page}
                             >
                               <svg

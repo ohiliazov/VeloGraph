@@ -1,7 +1,6 @@
-import time
-
 from loguru import logger
 from playwright.sync_api import sync_playwright
+from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from backend.scripts.base import BaseBikeCrawler
 from backend.scripts.constants import artifacts_dir
@@ -10,13 +9,13 @@ START_URL = "https://kross.pl/rowery"
 
 
 class KrossBikeCrawler(BaseBikeCrawler):
-    def __init__(self, archive: bool = False):
-        super().__init__(brand_name="kross", artifacts_dir=artifacts_dir, start_url=START_URL, archive=archive)
+    def __init__(self):
+        super().__init__(brand_name="kross", artifacts_dir=artifacts_dir, start_url=START_URL)
 
     def get_slug_from_url(self, url: str) -> str:
         return url.rstrip("/").split("/")[-1]
 
-    def collect_urls(self) -> list[str]:
+    def collect_urls(self, max_retries: int = 3) -> list[str]:
         urls: set[str] = set()
 
         with sync_playwright() as p:
@@ -31,7 +30,23 @@ class KrossBikeCrawler(BaseBikeCrawler):
 
             # Start at main catalog page
             logger.info("🌐 Opening Kross catalog page: {}", self.start_url)
-            page.goto(self.start_url, wait_until="networkidle")
+
+            @retry(
+                stop=stop_after_attempt(max_retries),
+                wait=wait_exponential(multiplier=1, min=2, max=10),
+                retry=retry_if_exception_type(Exception),
+                before_sleep=before_sleep_log(logger, "WARNING"),
+                reraise=True,
+            )
+            def _open_catalog():
+                page.goto(self.start_url, wait_until="networkidle", timeout=60000)
+
+            try:
+                _open_catalog()
+            except Exception:
+                logger.error("❌ Failed to open Kross catalog after {} attempts", max_retries)
+                browser.close()
+                return []
 
             while True:
                 # --- Extract all bike URLs on this page ---
@@ -50,9 +65,25 @@ class KrossBikeCrawler(BaseBikeCrawler):
                 next_btn = page.query_selector("a.action.next")
                 if next_btn and (next_href := next_btn.get_attribute("href")):
                     logger.debug("➡️ Navigating to next catalog page: {}", next_href)
-                    page.goto(next_href, wait_until="networkidle")
-                    time.sleep(1)  # wait for JS
-                    continue
+
+                    @retry(
+                        stop=stop_after_attempt(max_retries),
+                        wait=wait_exponential(multiplier=1, min=2, max=10),
+                        retry=retry_if_exception_type(Exception),
+                        before_sleep=before_sleep_log(logger, "WARNING"),
+                        reraise=True,
+                    )
+                    def _goto_next(url=next_href):
+                        page.goto(url, wait_until="networkidle", timeout=60000)
+
+                    try:
+                        _goto_next()
+                        continue
+                    except Exception:
+                        logger.error(
+                            "❌ Failed to navigate to next catalog page after {} attempts: {}", max_retries, next_href
+                        )
+                        break
 
                 logger.info("🛑 No more catalog pages detected. Stopping pagination.")
                 break
@@ -65,5 +96,5 @@ class KrossBikeCrawler(BaseBikeCrawler):
 if __name__ == "__main__":
     parser = KrossBikeCrawler.get_base_parser("kross")
     args = parser.parse_args()
-    crawler = KrossBikeCrawler(archive=args.archive)
+    crawler = KrossBikeCrawler()
     crawler.run(args)

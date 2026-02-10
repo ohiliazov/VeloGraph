@@ -19,22 +19,41 @@ export enum MaterialGroup {
   OTHER = "other",
 }
 
-export interface Frameset {
+export interface GeometrySpec {
   id: number;
-  name: string;
-  material: string | null;
-  category: string;
+  definition_id: number;
   size_label: string;
-  stack: number;
-  reach: number;
-  top_tube_effective_length: number;
-  seat_tube_length: number;
-  head_tube_length: number;
-  chainstay_length: number;
+  stack_mm: number;
+  reach_mm: number;
+  top_tube_effective_mm: number | null;
+  seat_tube_length_mm: number | null;
+  head_tube_length_mm: number | null;
   head_tube_angle: number;
   seat_tube_angle: number;
-  bb_drop: number;
-  wheelbase: number;
+  chainstay_length_mm: number;
+  wheelbase_mm: number;
+  bb_drop_mm: number;
+  fork_offset_mm: number | null;
+  trail_mm: number | null;
+  standover_height_mm: number | null;
+  definition?: FrameDefinition;
+}
+
+export interface FrameDefinition {
+  id: number;
+  family_id: number;
+  name: string;
+  year_start: number | null;
+  year_end: number | null;
+  material: string | null;
+  family?: BikeFamily;
+}
+
+export interface BikeFamily {
+  id: number;
+  brand_name: string;
+  family_name: string;
+  category: string;
 }
 
 export interface BuildKit {
@@ -51,15 +70,44 @@ export interface BikeProduct {
   sku: string;
   colors: string[];
   source_url: string | null;
-  frameset: Frameset;
+  geometry_spec: GeometrySpec;
   build_kit: BuildKit;
 }
 
 export interface BikeGroup {
-  frameset_name: string;
-  material: string | null;
+  family: BikeFamily;
+  definition: FrameDefinition;
   build_kit: BuildKit;
   products: BikeProduct[];
+}
+
+export interface Geometry {
+  size_label: string;
+  stack: number;
+  reach: number;
+  top_tube_effective_length: number;
+  seat_tube_length: number;
+  head_tube_length: number;
+  chainstay_length: number;
+  head_tube_angle: number;
+  seat_tube_angle: number;
+  bb_drop: number;
+  wheelbase: number;
+}
+
+export interface Bike {
+  id: number;
+  brand: string;
+  model_name: string;
+  model_year: number;
+  categories: string[];
+  geometries: Geometry[];
+  color?: string;
+  frame_material?: string;
+  wheel_size?: string;
+  brake_type?: string;
+  max_tire_width?: number;
+  source_url?: string;
 }
 
 export interface SearchResult {

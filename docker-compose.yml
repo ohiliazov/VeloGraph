@@ -54,9 +54,11 @@ services:
 
   # --- Backend (FastAPI) ---
   backend:
+    profiles: ["prod"]
     build:
       context: ./backend
       dockerfile: Dockerfile
+      target: prod
     container_name: velograph_backend
     environment:
       POSTGRES_USER: velograph
@@ -76,9 +78,11 @@ services:
 
   # --- Frontend (Next.js) ---
   frontend:
+    profiles: ["prod"]
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: prod
     container_name: velograph_frontend
     environment:
       # Keep API URL pointing to host-published backend for browser requests
@@ -87,6 +91,57 @@ services:
       - "3000:3000"
     depends_on:
       - backend
+    networks:
+      - velograph_net
+
+  # --- Backend (Dev) ---
+  backend-dev:
+    profiles: ["dev"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: dev
+    container_name: velograph_backend_dev
+    environment:
+      POSTGRES_USER: velograph
+      POSTGRES_PASSWORD: velograph
+      POSTGRES_DB: velograph
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      ELASTICSEARCH_HOST: elasticsearch
+      ELASTICSEARCH_PORT: 9200
+    volumes:
+      - ./backend:/app/backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - elasticsearch
+    networks:
+      - velograph_net
+
+  # --- Frontend (Dev) ---
+  frontend-dev:
+    profiles: ["dev"]
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    container_name: velograph_frontend_dev
+    working_dir: /app
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+    command: ["sh", "-lc", "[ -d node_modules ] || npm ci; npm run dev"]
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend-dev
     networks:
       - velograph_net
 

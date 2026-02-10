@@ -1,9 +1,9 @@
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
 
-class BikeCategory(str, Enum):
+class BikeCategory(StrEnum):
     GRAVEL = "gravel"
     MTB = "mtb"
     TREKKING = "trekking"
@@ -16,7 +16,7 @@ class BikeCategory(str, Enum):
     OTHER = "other"
 
 
-class MaterialGroup(str, Enum):
+class MaterialGroup(StrEnum):
     CARBON = "carbon"
     ALUMINUM = "aluminum"
     STEEL = "steel"
@@ -24,24 +24,50 @@ class MaterialGroup(str, Enum):
     OTHER = "other"
 
 
-class FramesetSchema(BaseModel):
+class BikeFamilySchema(BaseModel):
     id: int
-    name: str
-    material: str | None = None
+    brand_name: str
+    family_name: str
     category: str
-    size_label: str
-    stack: int
-    reach: int
-    top_tube_effective_length: int
-    seat_tube_length: int
-    head_tube_length: int
-    chainstay_length: int
-    head_tube_angle: float
-    seat_tube_angle: float
-    bb_drop: int
-    wheelbase: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class GeometrySpecSchema(BaseModel):
+    id: int
+    definition_id: int
+    size_label: str
+    stack_mm: int
+    reach_mm: int
+    top_tube_effective_mm: int | None = None
+    seat_tube_length_mm: int | None = None
+    head_tube_length_mm: int | None = None
+    head_tube_angle: float
+    seat_tube_angle: float
+    chainstay_length_mm: int
+    wheelbase_mm: int
+    bb_drop_mm: int
+    fork_offset_mm: int | None = None
+    trail_mm: int | None = None
+    standover_height_mm: int | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class FrameDefinitionSchema(BaseModel):
+    id: int
+    family_id: int
+    name: str
+    year_start: int | None = None
+    year_end: int | None = None
+    material: str | None = None
+    family: BikeFamilySchema | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GeometrySpecExtendedSchema(GeometrySpecSchema):
+    definition: FrameDefinitionSchema
 
 
 class BuildKitSchema(BaseModel):
@@ -60,7 +86,7 @@ class BikeProductSchema(BaseModel):
     sku: str
     colors: list[str | None] = []
     source_url: str | None = None
-    frameset: FramesetSchema
+    geometry_spec: GeometrySpecExtendedSchema
     build_kit: BuildKitSchema
 
     model_config = ConfigDict(from_attributes=True)
@@ -69,8 +95,8 @@ class BikeProductSchema(BaseModel):
 class BikeGroupSchema(BaseModel):
     """A group of bike products (different sizes of the same model/build kit)."""
 
-    frameset_name: str
-    material: str | None = None
+    family: BikeFamilySchema
+    definition: FrameDefinitionSchema
     build_kit: BuildKitSchema
     products: list[BikeProductSchema]
 
@@ -80,25 +106,40 @@ class BikeGroupSchema(BaseModel):
 class BikeProductCreateSchema(BaseModel):
     sku: str
     colors: list[str] = []
-    frameset_id: int
+    geometry_spec_id: int
     build_kit_id: int
 
 
-class FramesetCreateSchema(BaseModel):
+class BikeFamilyCreateSchema(BaseModel):
+    brand_name: str
+    family_name: str
+    category: str
+
+
+class FrameDefinitionCreateSchema(BaseModel):
+    family_id: int
     name: str
+    year_start: int | None = None
+    year_end: int | None = None
     material: str | None = None
-    category: str = "other"
+
+
+class GeometrySpecCreateSchema(BaseModel):
+    definition_id: int
     size_label: str
-    stack: int
-    reach: int
-    top_tube_effective_length: int
-    seat_tube_length: int
-    head_tube_length: int
-    chainstay_length: int
+    stack_mm: int
+    reach_mm: int
+    top_tube_effective_mm: int | None = None
+    seat_tube_length_mm: int | None = None
+    head_tube_length_mm: int | None = None
     head_tube_angle: float
     seat_tube_angle: float
-    bb_drop: int
-    wheelbase: int
+    chainstay_length_mm: int
+    wheelbase_mm: int
+    bb_drop_mm: int
+    fork_offset_mm: int | None = None
+    trail_mm: int | None = None
+    standover_height_mm: int | None = None
 
 
 class BuildKitCreateSchema(BaseModel):

@@ -25,7 +25,7 @@ export default function LanguageSwitcher() {
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-gray-300 bg-white text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none"
+        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
@@ -37,14 +37,14 @@ export default function LanguageSwitcher() {
 
       {open && (
         <ul
-          className="absolute right-0 z-50 mt-2 w-56 max-h-80 overflow-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+          className="absolute right-0 z-50 mt-2 w-56 max-h-80 overflow-auto rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 py-1 shadow-lg"
           role="listbox"
         >
           {supportedLanguages.map((lang) => (
             <li key={lang.code}>
               <button
-                className={`flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-gray-100 ${
-                  language === lang.code ? "bg-gray-50" : ""
+                className={`flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-800 ${
+                  language === lang.code ? "bg-gray-50 dark:bg-gray-800" : ""
                 }`}
                 role="option"
                 aria-selected={language === lang.code}
