@@ -184,69 +184,6 @@ class BaseBikeExtractor:
         """Processes all HTML files in the html_dir."""
         self.process_directory(self.html_dir, self.json_dir, force=force)
 
-    def process_archive(
-        self, html_zip: Path, json_dir: Path | None = None, force: bool = False, filename: str | None = None
-    ):
-        """Processes HTML files in a zip archive."""
-        json_dir = json_dir or self.json_dir
-        json_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"📦 Scanning archive: {html_zip}...")
-
-        processed_htmls = set()
-        files_processed = 0
-        skipped_count = 0
-
-        with zipfile.ZipFile(html_zip, "r") as z:
-            names = set(z.namelist())
-            if filename:
-                if filename not in names:
-                    logger.error(f"❌ File {filename} not found in archive {html_zip}")
-                    return
-                html_files = [filename]
-            else:
-                html_files = sorted([n for n in names if n.endswith(".html")])
-
-            total = len(html_files)
-
-            for idx, html_name in enumerate(html_files, 1):
-                if html_name in processed_htmls:
-                    continue
-
-                try:
-                    logger.info(f"📄 [{idx}/{total}] Processing {html_name}...")
-                    content = z.read(html_name).decode("utf-8")
-
-                    # Handle brand-specific additional data (like Trek's sizing JSON)
-                    additional_data = self._get_additional_data(html_name, names, z)
-
-                    data = self.extract_bike_data(content, additional_data)
-
-                    if data:
-                        # Mark variants as processed to avoid duplicates
-                        for v in data.meta.colors:
-                            processed_htmls.add(v.html_path)
-                        processed_htmls.add(html_name)
-
-                        json_name = Path(html_name).with_suffix(".json").name
-                        json_path = json_dir / json_name
-                        if json_path.exists() and not force:
-                            logger.debug(f"⏭️ Skipping {html_name}: JSON already exists")
-                            skipped_count += 1
-                            continue
-
-                        json_path.write_text(data.model_dump_json(indent=2), encoding="utf-8")
-                        logger.debug(f"✅ Saved JSON: {json_path.name}")
-                        files_processed += 1
-                    else:
-                        logger.warning(f"⚠️ Skipped {html_name}: No data extracted")
-                        skipped_count += 1
-                        processed_htmls.add(html_name)
-                except Exception:
-                    logger.exception(f"🚨 Error processing {html_name}")
-                    skipped_count += 1
-
-        logger.success(f"🏁 Done. Processed: {files_processed} | Skipped: {skipped_count}")
-
     def process_directory(
         self,
         html_dir: Path | None = None,
@@ -335,7 +272,5 @@ class BaseBikeExtractor:
         )
         parser.add_argument("--force", action="store_true", help="Overwrite existing JSON files.")
         parser.add_argument("--filename", type=str, help="Process only this specific file.")
-        parser.add_argument(
-            "--archive", action="store_true", help="Archive results into a zip file and remove directory."
-        )
+
         return parser

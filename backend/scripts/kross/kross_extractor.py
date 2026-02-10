@@ -271,17 +271,10 @@ def main():
     args = parser.parse_args()
     extractor = KrossBikeExtractor(html_path=args.input, json_path=args.output)
 
-    # Priority to archive if it exists
-    archive_input = args.input.with_suffix(".zip")
-    if archive_input.exists():
-        extractor.process_archive(archive_input, args.output, args.force, args.filename)
-    elif args.input.exists():
+    if args.input.exists():
         extractor.process_directory(args.input, args.output, args.force, args.filename)
     else:
         sys.exit(1)
-
-    if not args.filename and args.archive:
-        extractor.finalize_extraction(args.output)
 
 
 if __name__ == "__main__":
