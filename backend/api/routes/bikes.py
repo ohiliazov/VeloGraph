@@ -1,4 +1,4 @@
-from typing import Annotated, cast
+from typing import Annotated
 
 from elasticsearch import AsyncElasticsearch
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,14 +9,11 @@ from backend.api.schemas import (
     BikeCategory,
     BikeFamilyCreateSchema,
     BikeFamilySchema,
-    BikeGroupSchema,
-    BikeProductCreateSchema,
-    BikeProductSchema,
-    BuildKitCreateSchema,
-    BuildKitSchema,
     FrameDefinitionCreateSchema,
+    FrameDefinitionExtendedSchema,
     FrameDefinitionSchema,
     GeometrySpecCreateSchema,
+    GeometrySpecExtendedSchema,
     GeometrySpecSchema,
     GroupedSearchResult,
     MaterialGroup,
@@ -25,54 +22,14 @@ from backend.api.schemas import (
 from backend.core.constants import BIKE_PRODUCT_INDEX, FRAMESET_GEOMETRY_INDEX
 from backend.core.db import get_db
 from backend.core.elasticsearch import get_es_client
-from backend.core.models import BikeFamilyORM, BikeProductORM, BuildKitORM, FrameDefinitionORM, GeometrySpecORM
-from backend.core.utils import get_material_group, group_bike_product
+from backend.core.models import BikeFamilyORM, FrameDefinitionORM, GeometrySpecORM
+from backend.core.utils import get_material_group
 
 router = APIRouter()
 
 
-def _group_products(products: list[BikeProductORM]) -> list[dict]:
-    groups = {}
-    for p in products:
-        definition = p.geometry_spec.definition
-        family = definition.family
-        key = (family.id, definition.id, p.build_kit_id)
-        if key not in groups:
-            groups[key] = {
-                "family": family,
-                "definition": definition,
-                "build_kit": p.build_kit,
-                "products": [],
-            }
-        groups[key]["products"].append(p)
-
-    for group in groups.values():
-        group["products"].sort(key=lambda x: x.geometry_spec.stack_mm)
-
-    return list(groups.values())
-
-
-def _find_siblings(db: Session, product: BikeProductORM) -> list[BikeProductORM]:
-    sibling_stmt = (
-        select(BikeProductORM)
-        .join(BikeProductORM.geometry_spec)
-        .where(
-            GeometrySpecORM.definition_id == product.geometry_spec.definition_id,
-            BikeProductORM.build_kit_id == product.build_kit_id,
-        )
-        .options(
-            selectinload(BikeProductORM.geometry_spec)
-            .selectinload(GeometrySpecORM.definition)
-            .selectinload(FrameDefinitionORM.family),
-            selectinload(BikeProductORM.build_kit),
-        )
-        .order_by(GeometrySpecORM.stack_mm.asc())
-    )
-    return cast(list[BikeProductORM], db.scalars(sibling_stmt).all())
-
-
 @router.get("/families", response_model=list[BikeFamilySchema])
-def list_families(db: Annotated[Session, Depends(get_db)], limit: int = 10):
+def list_families(db: Annotated[Session, Depends(get_db)], limit: int = 100):
     stmt = select(BikeFamilyORM).limit(limit)
     return db.scalars(stmt).all()
 
@@ -102,15 +59,6 @@ def create_geometry_spec(data: GeometrySpecCreateSchema, db: Annotated[Session, 
     db.commit()
     db.refresh(new_spec)
     return new_spec
-
-
-@router.post("/build-kits", response_model=BuildKitSchema)
-def create_build_kit(data: BuildKitCreateSchema, db: Annotated[Session, Depends(get_db)]):
-    new_bk = BuildKitORM(**data.model_dump())
-    db.add(new_bk)
-    db.commit()
-    db.refresh(new_bk)
-    return new_bk
 
 
 @router.get("/search/geometry", response_model=SearchResult)
@@ -153,33 +101,30 @@ async def search_geometry(
 
     resp = await es.search(index=FRAMESET_GEOMETRY_INDEX, query=query, sort=sort, from_=from_, size=size)
     total = resp["hits"]["total"]["value"]
-    product_ids = [hit["_source"]["id"] for hit in resp["hits"]["hits"]]
+    spec_ids = [hit["_source"]["id"] for hit in resp["hits"]["hits"]]
 
-    if not product_ids:
+    if not spec_ids:
         return {"total": total, "items": []}
 
     stmt = (
-        select(BikeProductORM)
-        .where(BikeProductORM.id.in_(product_ids))
+        select(GeometrySpecORM)
+        .where(GeometrySpecORM.id.in_(spec_ids))
         .options(
-            selectinload(BikeProductORM.geometry_spec)
-            .selectinload(GeometrySpecORM.definition)
-            .selectinload(FrameDefinitionORM.family),
-            selectinload(BikeProductORM.build_kit),
+            selectinload(GeometrySpecORM.definition).selectinload(FrameDefinitionORM.family),
         )
     )
-    products = db.scalars(stmt).all()
-    product_map = {p.id: p for p in products}
-    sorted_products = [product_map[pid] for pid in product_ids if pid in product_map]
+    specs = db.scalars(stmt).all()
+    spec_map = {s.id: s for s in specs}
+    sorted_specs = [spec_map[sid] for sid in spec_ids if sid in spec_map]
 
-    return {"total": total, "items": sorted_products}
+    return {"total": total, "items": sorted_specs}
 
 
 @router.get("/search/keyword", response_model=GroupedSearchResult)
 async def search_keyword(
     es: Annotated[AsyncElasticsearch, Depends(get_es_client)],
     db: Annotated[Session, Depends(get_db)],
-    q: Annotated[str | None, Query(description="Search by brand, model or SKU")] = None,
+    q: Annotated[str | None, Query(description="Search by brand or model")] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 10,
     category: Annotated[BikeCategory | None, Query()] = None,
@@ -187,9 +132,9 @@ async def search_keyword(
 ):
     filters = []
     if category:
-        filters.append({"term": {"category": category.value}})
+        filters.append({"term": {"family.category": category.value}})
     if material:
-        filters.append({"term": {"material_group": material.value}})
+        filters.append({"term": {"definition.material_group": material.value}})
 
     must = []
     if q:
@@ -200,9 +145,6 @@ async def search_keyword(
                     "fields": [
                         "family.family_name^3",
                         "definition.name^2",
-                        "skus",
-                        "build_kit.name",
-                        "build_kit.groupset",
                     ],
                     "fuzziness": "AUTO",
                 }
@@ -221,167 +163,108 @@ async def search_keyword(
     resp = await es.search(index=BIKE_PRODUCT_INDEX, query=query, sort=sort, from_=from_, size=size)
     total = resp["hits"]["total"]["value"]
 
-    group_items = []
-    for hit in resp["hits"]["hits"]:
-        source = hit["_source"]
-        product_ids = source["product_ids"]
+    def_ids = [hit["_source"]["id"] for hit in resp["hits"]["hits"]]
 
-        stmt = (
-            select(BikeProductORM)
-            .where(BikeProductORM.id.in_(product_ids))
-            .options(
-                selectinload(BikeProductORM.geometry_spec)
-                .selectinload(GeometrySpecORM.definition)
-                .selectinload(FrameDefinitionORM.family),
-                selectinload(BikeProductORM.build_kit),
-            )
-        )
-        products = cast(list[BikeProductORM], db.scalars(stmt).all())
-        products.sort(key=lambda x: x.geometry_spec.stack_mm)
+    if not def_ids:
+        return {"total": total, "items": []}
 
-        if products:
-            group_items.append(
-                {
-                    "family": products[0].geometry_spec.definition.family,
-                    "definition": products[0].geometry_spec.definition,
-                    "build_kit": products[0].build_kit,
-                    "products": products,
-                }
-            )
-
-    return {"total": total, "items": group_items}
-
-
-@router.get("/{product_id}", response_model=BikeGroupSchema)
-def get_bike_product(product_id: int, db: Annotated[Session, Depends(get_db)]):
     stmt = (
-        select(BikeProductORM)
-        .where(BikeProductORM.id == product_id)
+        select(FrameDefinitionORM)
+        .where(FrameDefinitionORM.id.in_(def_ids))
         .options(
-            selectinload(BikeProductORM.geometry_spec)
-            .selectinload(GeometrySpecORM.definition)
-            .selectinload(FrameDefinitionORM.family),
-            selectinload(BikeProductORM.build_kit),
+            selectinload(FrameDefinitionORM.family),
+            selectinload(FrameDefinitionORM.geometries),
         )
     )
-    product = db.scalar(stmt)
-    if not product:
-        raise HTTPException(status_code=404, detail="Bike product not found")
+    definitions = db.scalars(stmt).all()
+    def_map = {d.id: d for d in definitions}
+    sorted_defs = [def_map[sid] for sid in def_ids if sid in def_map]
 
-    siblings = _find_siblings(db, product)
-
-    return {
-        "family": product.geometry_spec.definition.family,
-        "definition": product.geometry_spec.definition,
-        "build_kit": product.build_kit,
-        "products": siblings,
-    }
+    return {"total": total, "items": sorted_defs}
 
 
-@router.post("/", response_model=BikeProductSchema)
-async def create_bike_product(
-    product_data: BikeProductCreateSchema,
+@router.get("/definitions/{def_id}", response_model=FrameDefinitionExtendedSchema)
+def get_frame_definition(def_id: int, db: Annotated[Session, Depends(get_db)]):
+    stmt = (
+        select(FrameDefinitionORM)
+        .where(FrameDefinitionORM.id == def_id)
+        .options(
+            selectinload(FrameDefinitionORM.family),
+            selectinload(FrameDefinitionORM.geometries),
+        )
+    )
+    definition = db.scalar(stmt)
+    if not definition:
+        raise HTTPException(status_code=404, detail="Frame definition not found")
+
+    return definition
+
+
+@router.get("/specs/{spec_id}", response_model=GeometrySpecExtendedSchema)
+def get_geometry_spec(spec_id: int, db: Annotated[Session, Depends(get_db)]):
+    stmt = (
+        select(GeometrySpecORM)
+        .where(GeometrySpecORM.id == spec_id)
+        .options(
+            selectinload(GeometrySpecORM.definition).selectinload(FrameDefinitionORM.family),
+        )
+    )
+    spec = db.scalar(stmt)
+    if not spec:
+        raise HTTPException(status_code=404, detail="Geometry spec not found")
+
+    return spec
+
+
+@router.delete("/specs/{spec_id}")
+async def delete_geometry_spec(
+    spec_id: int,
     db: Annotated[Session, Depends(get_db)],
     es: Annotated[AsyncElasticsearch, Depends(get_es_client)],
 ):
-    new_product = BikeProductORM(**product_data.model_dump())
-    db.add(new_product)
-    db.commit()
-    db.refresh(new_product)
+    stmt = select(GeometrySpecORM).where(GeometrySpecORM.id == spec_id)
+    spec = db.scalar(stmt)
+    if not spec:
+        raise HTTPException(status_code=404, detail="Geometry spec not found")
 
+    def_id = spec.definition_id
+    db.delete(spec)
+    db.commit()
+
+    await es.delete(index=FRAMESET_GEOMETRY_INDEX, id=str(spec_id), ignore=[404], refresh=True)
+
+    # Re-sync parent definition to BIKE_PRODUCT_INDEX
     stmt = (
-        select(BikeProductORM)
-        .where(BikeProductORM.id == new_product.id)
+        select(FrameDefinitionORM)
+        .where(FrameDefinitionORM.id == def_id)
         .options(
-            selectinload(BikeProductORM.geometry_spec)
-            .selectinload(GeometrySpecORM.definition)
-            .selectinload(FrameDefinitionORM.family),
-            selectinload(BikeProductORM.build_kit),
+            selectinload(FrameDefinitionORM.family),
+            selectinload(FrameDefinitionORM.geometries),
         )
     )
-    product = db.scalar(stmt)
+    definition = db.scalar(stmt)
+    if not definition or not definition.geometries:
+        await es.delete(index=BIKE_PRODUCT_INDEX, id=str(def_id), ignore=[404], refresh=True)
+    else:
+        await sync_definition_to_es(definition, es)
 
-    await sync_product_to_es(product, es, db)
-
-    return product
+    return {"detail": "Geometry spec deleted"}
 
 
-async def sync_product_to_es(product: BikeProductORM, es: AsyncElasticsearch, db: Session):
-    es_doc = {
-        "id": product.id,
-        "sku": product.sku,
-        "colors": product.colors,
-        "source_url": product.source_url,
-        "geometry_spec": {
-            "size_label": product.geometry_spec.size_label,
-            "stack_mm": product.geometry_spec.stack_mm,
-            "reach_mm": product.geometry_spec.reach_mm,
+async def sync_definition_to_es(definition: FrameDefinitionORM, es: AsyncElasticsearch):
+    # This will be used to populate BIKE_PRODUCT_INDEX (grouped view)
+    doc = {
+        "id": definition.id,
+        "family": {
+            "brand_name": definition.family.brand_name,
+            "family_name": definition.family.family_name,
+            "category": definition.family.category,
         },
         "definition": {
-            "name": product.geometry_spec.definition.name,
-            "material": product.geometry_spec.definition.material,
-            "material_group": get_material_group(product.geometry_spec.definition.material),
+            "name": definition.name,
+            "material": definition.material,
+            "material_group": get_material_group(definition.material),
         },
-        "family": {
-            "brand_name": product.geometry_spec.definition.family.brand_name,
-            "family_name": product.geometry_spec.definition.family.family_name,
-            "category": product.geometry_spec.definition.family.category,
-        },
-        "build_kit": {
-            "name": product.build_kit.name,
-            "groupset": product.build_kit.groupset,
-            "wheelset": product.build_kit.wheelset,
-        },
+        "sizes": [s.size_label for s in definition.geometries],
     }
-    await es.index(index=FRAMESET_GEOMETRY_INDEX, id=str(product.id), document=es_doc, refresh=True)
-
-    siblings = _find_siblings(db, product)
-
-    group_id = (
-        (
-            f"{product.geometry_spec.definition.family.family_name}-"
-            f"{product.geometry_spec.definition.name}-"
-            f"{product.build_kit_id}"
-        )
-        .replace(" ", "-")
-        .lower()
-    )
-    group_doc = group_bike_product(product, siblings)
-    await es.index(index=BIKE_PRODUCT_INDEX, id=group_id, document=group_doc, refresh=True)
-
-
-@router.delete("/{product_id}")
-async def delete_bike_product(
-    product_id: int,
-    db: Annotated[Session, Depends(get_db)],
-    es: Annotated[AsyncElasticsearch, Depends(get_es_client)],
-):
-    stmt = select(BikeProductORM).where(BikeProductORM.id == product_id)
-    product = db.scalar(stmt)
-    if not product:
-        raise HTTPException(status_code=404, detail="Bike product not found")
-
-    db.delete(product)
-    db.commit()
-
-    await es.delete(index=FRAMESET_GEOMETRY_INDEX, id=str(product_id), ignore=[404], refresh=True)
-
-    group_id = (
-        (
-            f"{product.geometry_spec.definition.family.family_name}-"
-            f"{product.geometry_spec.definition.name}-"
-            f"{product.build_kit_id}"
-        )
-        .replace(" ", "-")
-        .lower()
-    )
-
-    siblings = _find_siblings(db, product)
-
-    if not siblings:
-        await es.delete(index=BIKE_PRODUCT_INDEX, id=group_id, ignore=[404], refresh=True)
-    else:
-        group_doc = group_bike_product(product, siblings)
-        await es.index(index=BIKE_PRODUCT_INDEX, id=group_id, document=group_doc, refresh=True)
-
-    return {"detail": "Bike product deleted"}
+    await es.index(index=BIKE_PRODUCT_INDEX, id=str(definition.id), document=doc, refresh=True)

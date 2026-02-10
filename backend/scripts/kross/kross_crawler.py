@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from loguru import logger
 from playwright.sync_api import sync_playwright
 from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -9,8 +11,10 @@ START_URL = "https://kross.pl/rowery"
 
 
 class KrossBikeCrawler(BaseBikeCrawler):
-    def __init__(self):
-        super().__init__(brand_name="kross", artifacts_dir=artifacts_dir, start_url=START_URL)
+    def __init__(self, url: str = START_URL, urls_path: Path | None = None):
+        brand_name = "kross"
+        urls_path = urls_path or (artifacts_dir / brand_name / "bike_urls.json")
+        super().__init__(brand_name=brand_name, start_url=url, urls_path=urls_path)
 
     def get_slug_from_url(self, url: str) -> str:
         return url.rstrip("/").split("/")[-1]
@@ -91,10 +95,3 @@ class KrossBikeCrawler(BaseBikeCrawler):
             browser.close()
 
         return sorted(urls)
-
-
-if __name__ == "__main__":
-    parser = KrossBikeCrawler.get_base_parser("kross")
-    args = parser.parse_args()
-    crawler = KrossBikeCrawler()
-    crawler.run(args)

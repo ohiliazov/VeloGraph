@@ -11,6 +11,7 @@ from selectolax.lexbor import LexborHTMLParser
 
 from backend.scripts.base import BaseBikeExtractor, BikeMeta, ColorVariant, ExtractedBikeData
 from backend.scripts.constants import artifacts_dir
+from backend.utils.helpers import extract_number
 
 
 class TrekBikeExtractor(BaseBikeExtractor):
@@ -27,8 +28,11 @@ class TrekBikeExtractor(BaseBikeExtractor):
         "WB": ["Rozstaw kół", "geometryWheelbase", "K —"],
     }
 
-    def __init__(self):
-        super().__init__(brand_name="Trek")
+    def __init__(self, html_path: Path | None = None, json_path: Path | None = None):
+        brand_name = "trek"
+        html_path = html_path or (artifacts_dir / brand_name / "raw_htmls")
+        json_path = json_path or (artifacts_dir / brand_name / "extracted_jsons")
+        super().__init__(brand_name="Trek", html_dir=html_path, json_dir=json_path)
 
     # --- Meta parsers (one function per field) ---
     def _parse_brand(self) -> str:
@@ -129,18 +133,7 @@ class TrekBikeExtractor(BaseBikeExtractor):
                 )
                 return model_name
 
-        return ""
-
-        # 3) Check for generic frameset name in URL as a fallback or component
-        # e.g. /.../madone/madone-sl/madone-sl-7-gen-8/p/57664/
-        source_url = self._parse_source_url(parser)
-        if source_url:
-            path_parts = source_url.split("?")[0].rstrip("/").split("/")
-            if len(path_parts) >= 3 and path_parts[-2] == "p":
-                model_slug = path_parts[-3]
-                return model_slug.replace("-", " ").title()
-
-        # 4) Fallback to other H1s
+        # 5) Fallback to other H1s
         for sel in ["h1.product-title", "h1.product-name", "h1.pdp__title", "h1.page-title", "h1"]:
             node = parser.css_first(sel)
             if node:
@@ -148,7 +141,7 @@ class TrekBikeExtractor(BaseBikeExtractor):
                 if txt and txt.lower() not in {"menu", "koszyk"}:
                     return html.unescape(txt)
 
-        # 5) Breadcrumb last item
+        # 6) Breadcrumb last item
         crumbs = parser.css('nav[aria-label="Breadcrumb"] a, .breadcrumb a')
         if crumbs:
             last = crumbs[-1].text(strip=True)
@@ -158,8 +151,19 @@ class TrekBikeExtractor(BaseBikeExtractor):
         return ""
 
     def _parse_frame_name(self, parser: LexborHTMLParser) -> str | None:
-        # 0) User instruction: div next to "Wybierz rodzaj ramy"
-        for fs in parser.css("fieldset"):
+        # 1) Try general sub-family-option radio (User suggestion)
+        # Note: we search ONLY in #app or main content area to avoid nav cards
+        content_area = parser.css_first("#app, main") or parser
+        frame_input = content_area.css_first('input[name^="sub-family-option-"][checked]')
+        if frame_input:
+            id_val = frame_input.attributes.get("id")
+            if id_val:
+                label_node = content_area.css_first(f'label[for="{id_val}"]')
+                if label_node:
+                    return html.unescape(label_node.text(strip=True)).strip()
+
+        # 2) User instruction fallback: div next to "Wybierz rodzaj ramy"
+        for fs in content_area.css("fieldset"):
             fs_text = fs.text()
             if "Wybierz rodzaj ramy" in fs_text:
                 checked_frame = fs.css_first("input[checked]")
@@ -171,25 +175,16 @@ class TrekBikeExtractor(BaseBikeExtractor):
                         if txt:
                             return html.unescape(txt).strip()
 
-        # 1) Extract from technical header if it has parenthesis
-        tech_header = parser.css_first('[qaid="tech__product-name-header"]')
+        # 3) Extract from technical header if it has parenthesis
+        tech_header = content_area.css_first('[qaid="tech__product-name-header"]')
         if tech_header:
             txt = tech_header.text(strip=True)
             m = re.search(r"\((Stepover|Midstep|Lowstep|Highstep|Stagger|Damski|Męski)\)", txt, flags=re.I)
             if m:
                 return m.group(1).capitalize()
 
-        # 2) Try general sub-family-option radio
-        frame_input = parser.css_first('input[name^="sub-family-option-"][checked]')
-        if frame_input:
-            id_val = frame_input.attributes.get("id")
-            if id_val:
-                label_node = parser.css_first(f'label[for="{id_val}"]')
-                if label_node:
-                    return html.unescape(label_node.text(strip=True)).strip()
-
-        # 3) Extract from title/h1 if it contains frame variation in parentheses
-        node = parser.css_first('h1[qaid="pdp-product-title"]')
+        # 4) Extract from title/h1 if it contains frame variation in parentheses
+        node = content_area.css_first('h1[qaid="pdp-product-title"]')
         if node:
             txt = node.text(strip=True)
             m = re.search(r"\((Stepover|Midstep|Lowstep|Highstep|Stagger|Damski|Męski)\)", txt, flags=re.I)
@@ -272,17 +267,72 @@ class TrekBikeExtractor(BaseBikeExtractor):
         return None
 
     def _parse_max_tire_width(self, parser: LexborHTMLParser) -> float | str | None:
+        # We MUST avoid navigation menu items
+        content_area = parser.css_first("#app, main") or parser
+
+        # 1) Try specialized qaid for feature specs (usually PDP row)
+        # Search multiple icons as the order varies by bike type
+        for i in range(6):
+            qaid = f"product-family-feature-spec-icon-{i}"
+            icon = content_area.css_first(f'[qaid="{qaid}"]')
+            if icon:
+                curr = icon.parent
+                while curr and curr.tag != "li" and curr.tag != "div":
+                    curr = curr.parent
+                if curr:
+                    txt = curr.text(strip=True).lower()
+                    # Look for tire clearance markers
+                    if any(k in txt for k in ["opon", "tire", "clearance", "prześwit"]):
+                        m = re.search(r"(\d+(?:\.\d+)?)\s*mm", txt, flags=re.I)
+                        if m:
+                            return extract_number(m.group(1))
+
+        # 2) Fallback to spec table or description
+        dts = content_area.css("dt.details-list__title")
+        for dt in dts:
+            dt_text = dt.text(strip=True).lower()
+            if "max" in dt_text and "opon" in dt_text:
+                dd = dt.next
+                while dd and dd.tag != "dd":
+                    dd = dd.next
+                if dd:
+                    txt = dd.text(strip=True)
+                    m = re.search(r"(\d+(?:\.\d+)?)\s*mm", txt, flags=re.I)
+                    if m:
+                        return extract_number(m.group(1))
         return None
 
     def _parse_material(self, parser: LexborHTMLParser) -> str | None:
+        # IMPORTANT: Exclude navigation/header to avoid false positives from mega-menu
+        content_area = parser.css_first("main, #app") or parser
+
+        # 0) Try specialized qaid for feature specs (Icons 0-5)
+        # Order varies, so we check text content for material keywords
+        for i in range(6):
+            qaid = f"product-family-feature-spec-icon-{i}"
+            icon = content_area.css_first(f'[qaid="{qaid}"]')
+            if icon:
+                curr = icon.parent
+                while curr and curr.tag != "li" and curr.tag != "div":
+                    curr = curr.parent
+                if curr:
+                    txt = curr.text(strip=True)
+                    if any(
+                        k in txt.lower()
+                        for k in ["carbon", "węglow", "aluminium", "aluminum", "stal", "steel", "oclv", "alpha"]
+                    ):
+                        mat = self._clean_material(html.unescape(txt))
+                        if mat:
+                            return mat
+
         # 1) Try short spec from configurator
-        for node in parser.css('dd[qaid*="-shortSpecFrame-value"], [qaid="shortSpecFrame-value"]'):
+        for node in content_area.css('dd[qaid*="-shortSpecFrame-value"], [qaid="shortSpecFrame-value"]'):
             mat = self._clean_material(html.unescape(node.text(strip=True)))
             if mat:
                 return mat
 
         # 2) Fallback to spec table: Look for "Rama" or "Materiał ramy"
-        dts = parser.css("dt.details-list__title")
+        dts = content_area.css("dt.details-list__title")
         for dt in dts:
             dt_text = dt.text(strip=True)
             if dt_text in ["Rama", "Materiał ramy", "Frame"]:
@@ -294,9 +344,24 @@ class TrekBikeExtractor(BaseBikeExtractor):
                     if mat:
                         return mat
 
-        # 3) Heuristic: look for Aluminium/Carbon in general spec li/span
-        for node in parser.css("li span.leading-none, .spec-attribute"):
+        # 3) Heuristic: look for material keywords in li/span, EXCLUDING nav
+        for node in content_area.css("li span, .spec-attribute"):
+            # Exclude elements inside nav/header
+            is_in_nav = False
+            curr = node.parent
+            while curr:
+                if curr.tag in {"nav", "header"} or "nav" in curr.attributes.get("class", "").lower():
+                    is_in_nav = True
+                    break
+                curr = curr.parent
+            if is_in_nav:
+                continue
+
             txt = node.text(strip=True)
+            # Look for OCLV or Alpha specifically
+            if "OCLV" in txt or "Alpha" in txt:
+                return self._clean_material(txt)
+
             if txt in ["Aluminium", "Karbon", "Carbon", "Stal", "Steel"]:
                 return txt
 
@@ -306,6 +371,20 @@ class TrekBikeExtractor(BaseBikeExtractor):
         if not text:
             return ""
         text = re.sub(r"^(Rama|Materiał ramy|Frame):\s*", "", text, flags=re.I)
+
+        # Handle Trek OCLV Carbon
+        if "OCLV" in text:
+            m = re.search(r"OCLV\s*(\d+)", text, flags=re.I)
+            if m:
+                return f"Carbon OCLV {m.group(1)}"
+            return "Carbon OCLV"
+
+        # Handle Alpha Aluminum
+        if "Alpha" in text and ("Aluminum" in text or "Aluminium" in text):
+            m = re.search(r"Alpha\s*(\d+)", text, flags=re.I)
+            if m:
+                return f"Aluminum Alpha {m.group(1)}"
+            return "Aluminum Alpha"
 
         # Prefer short versions if long
         if ("Aluminum" in text or "Aluminium" in text) and len(text) > 30:
@@ -646,9 +725,9 @@ class TrekBikeExtractor(BaseBikeExtractor):
 
 
 def main():
-    extractor = TrekBikeExtractor()
-    parser = extractor.get_base_parser("trek", artifacts_dir)
+    parser = BaseBikeExtractor.get_base_parser("trek", artifacts_dir)
     args = parser.parse_args()
+    extractor = TrekBikeExtractor(html_path=args.input, json_path=args.output)
 
     archive_input = args.input.with_suffix(".zip")
     if archive_input.exists():

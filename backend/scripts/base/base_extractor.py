@@ -7,8 +7,15 @@ from typing import Any, ClassVar
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from backend.core.models import BuildKit
 from backend.utils.helpers import extract_number
+
+
+class BuildKit(BaseModel):
+    name: str
+    groupset: str | None = None
+    wheelset: str | None = None
+    cockpit: str | None = None
+    tires: str | None = None
 
 
 class ColorVariant(BaseModel):
@@ -68,8 +75,10 @@ class BaseBikeExtractor:
         "tires": {"opony", "opona"},
     }
 
-    def __init__(self, brand_name: str):
+    def __init__(self, brand_name: str, html_dir: Path, json_dir: Path):
         self.brand_name = brand_name
+        self.html_dir = html_dir
+        self.json_dir = json_dir
 
     def clean_value(self, value: str) -> str | int | float:
         """Converts string values to int or float if possible."""
@@ -140,12 +149,22 @@ class BaseBikeExtractor:
                     bk_data["name"] = rd_val
         return BuildKit(**bk_data)
 
+    def extract_file(self, html_path: Path, additional_data: Any = None) -> ExtractedBikeData | None:
+        """Extracts data from a single HTML file."""
+        if not html_path.exists():
+            logger.error(f"❌ File {html_path} not found")
+            return None
+
+        content = html_path.read_text(encoding="utf-8")
+        return self.extract_bike_data(content, additional_data)
+
     def extract_bike_data(self, html: str, additional_data: Any = None) -> ExtractedBikeData | None:
         """To be implemented by subclasses."""
         raise NotImplementedError
 
-    def finalize_extraction(self, json_dir: Path):
+    def finalize_extraction(self, json_dir: Path | None = None):
         """Archives extracted JSONs to a zip file and removes the original folder."""
+        json_dir = json_dir or self.json_dir
         if not json_dir.exists():
             logger.warning(f"⚠️ Cannot finalize: {json_dir} does not exist")
             return
@@ -161,8 +180,15 @@ class BaseBikeExtractor:
         shutil.rmtree(json_dir)
         logger.info("🗑️ Removed original folder: {}", json_dir)
 
-    def process_archive(self, html_zip: Path, json_dir: Path, force: bool = False, filename: str | None = None):
+    def process_all(self, force: bool = False):
+        """Processes all HTML files in the html_dir."""
+        self.process_directory(self.html_dir, self.json_dir, force=force)
+
+    def process_archive(
+        self, html_zip: Path, json_dir: Path | None = None, force: bool = False, filename: str | None = None
+    ):
         """Processes HTML files in a zip archive."""
+        json_dir = json_dir or self.json_dir
         json_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"📦 Scanning archive: {html_zip}...")
 
@@ -221,8 +247,16 @@ class BaseBikeExtractor:
 
         logger.success(f"🏁 Done. Processed: {files_processed} | Skipped: {skipped_count}")
 
-    def process_directory(self, html_dir: Path, json_dir: Path, force: bool = False, filename: str | None = None):
+    def process_directory(
+        self,
+        html_dir: Path | None = None,
+        json_dir: Path | None = None,
+        force: bool = False,
+        filename: str | None = None,
+    ):
         """Processes HTML files in a directory."""
+        html_dir = html_dir or self.html_dir
+        json_dir = json_dir or self.json_dir
         json_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"📂 Scanning directory: {html_dir}...")
 

@@ -1,6 +1,5 @@
 from backend.api.schemas import BikeCategory, MaterialGroup
 from backend.core.constants import CATEGORY_PATTERNS, MATERIAL_PATTERNS
-from backend.core.models import BikeProductORM
 
 
 def get_simple_types(categories: list[str]) -> list[str]:
@@ -28,30 +27,3 @@ def get_material_group(material: str | None) -> str:
             return mat_enum.value
 
     return MaterialGroup.OTHER.value
-
-
-def group_bike_product(product: BikeProductORM, siblings: list[BikeProductORM]) -> dict:
-    definition = product.geometry_spec.definition
-    family = definition.family
-    return {
-        "family": {
-            "brand_name": family.brand_name,
-            "family_name": family.family_name,
-            "category": family.category,
-        },
-        "definition": {
-            "name": definition.name,
-            "material": definition.material,
-            "material_group": get_material_group(definition.material),
-        },
-        "build_kit": {
-            "name": product.build_kit.name,
-            "groupset": product.build_kit.groupset,
-            "wheelset": product.build_kit.wheelset,
-            "cockpit": product.build_kit.cockpit,
-            "tires": product.build_kit.tires,
-        },
-        "skus": [p.sku for p in siblings],
-        "product_ids": [p.id for p in siblings],
-        "sizes": [p.geometry_spec.size_label for p in siblings],
-    }

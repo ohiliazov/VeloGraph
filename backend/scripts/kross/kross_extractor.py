@@ -1,5 +1,6 @@
 import re
 import sys
+from pathlib import Path
 from typing import Any, ClassVar
 
 from selectolax.lexbor import LexborHTMLParser
@@ -22,8 +23,11 @@ class KrossBikeExtractor(BaseBikeExtractor):
         "WB": ["WB - Baza kół"],
     }
 
-    def __init__(self):
-        super().__init__(brand_name="Kross")
+    def __init__(self, html_path: Path | None = None, json_path: Path | None = None):
+        brand_name = "kross"
+        html_path = html_path or (artifacts_dir / brand_name / "raw_htmls")
+        json_path = json_path or (artifacts_dir / brand_name / "extracted_jsons")
+        super().__init__(brand_name="Kross", html_dir=html_path, json_dir=json_path)
 
     # --- Meta parsers (one function per field) ---
     def _parse_brand(self) -> str:
@@ -263,9 +267,9 @@ class KrossBikeExtractor(BaseBikeExtractor):
 
 
 def main():
-    extractor = KrossBikeExtractor()
-    parser = extractor.get_base_parser("kross", artifacts_dir)
+    parser = BaseBikeExtractor.get_base_parser("kross", artifacts_dir)
     args = parser.parse_args()
+    extractor = KrossBikeExtractor(html_path=args.input, json_path=args.output)
 
     # Priority to archive if it exists
     archive_input = args.input.with_suffix(".zip")
