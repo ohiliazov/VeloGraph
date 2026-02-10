@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import BikeSearch from "../components/BikeSearch";
 import LanguageSwitcher from "../components/LanguageSwitcher";
+import ThemeToggle from "../components/ThemeToggle";
 import { useLanguage } from "../context/LanguageContext";
 
 export default function Home() {
@@ -18,7 +20,27 @@ export default function Home() {
             {t.ui.hero_subtitle}
           </p>
         </div>
-        <LanguageSwitcher />
+        <div className="flex items-center gap-3">
+          <Link
+            href="/fit"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-blue-600 text-white font-semibold hover:bg-blue-700 shadow-sm"
+          >
+            {/* Calculator icon */}
+            <svg
+              className="w-4 h-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <rect x="4" y="3" width="16" height="18" rx="2" ry="2" />
+              <path d="M8 7h8M8 11h8M8 15h2M12 15h2M16 15h0" />
+            </svg>
+            Bike Fit Calculator
+          </Link>
+          <ThemeToggle />
+          <LanguageSwitcher />
+        </div>
       </header>
 
       <main>

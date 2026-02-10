@@ -87,7 +87,10 @@ export default function BikeSearch() {
         // Initialize size selection for groups
         const initialSelection: Record<string, number> = {};
         data.items?.forEach((item) => {
-          const groupKey = `${item.family?.family_name}-${item.name}`;
+          if (!item) return;
+          const groupKey = `${item.family?.family_name || "Unknown"}-${
+            item.name || "Unknown"
+          }`;
           if (item.geometries && item.geometries.length > 0) {
             initialSelection[groupKey] = item.geometries[0].id;
           }
@@ -467,10 +470,13 @@ export default function BikeSearch() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
-                {results.map((item) => {
+                {results.map((item, index) => {
+                  if (!item) return null;
                   const isGroup = "geometries" in item;
                   const groupKey = isGroup
-                    ? `${item.family?.family_name}-${item.name}`
+                    ? `${item.family?.family_name || "Unknown"}-${
+                        item.name || "Unknown"
+                      }`
                     : "";
                   const selectedId = isGroup
                     ? selectedProductIds[groupKey] || item.geometries?.[0]?.id
@@ -485,10 +491,6 @@ export default function BikeSearch() {
                   const definition = isGroup
                     ? (item as FrameDefinition)
                     : (item as GeometrySpec).definition;
-
-                  const isProductInComparison = isInComparison(geometry.id);
-                  const sDiff = geometry.stack_mm - Number(stack);
-                  const rDiff = geometry.reach_mm - Number(reach);
 
                   // Visualization range based on average size differences
                   const RANGE = 20;
@@ -515,9 +517,19 @@ export default function BikeSearch() {
                     return t.fit.poor;
                   };
 
+                  const isProductInComparison = isInComparison(geometry.id);
+                  const sDiff = Number(stack)
+                    ? geometry.stack_mm - Number(stack)
+                    : 0;
+                  const rDiff = Number(reach)
+                    ? geometry.reach_mm - Number(reach)
+                    : 0;
+
                   return (
                     <tr
-                      key={isGroup ? groupKey : definition?.id}
+                      key={
+                        isGroup ? `${groupKey}-${index}` : geometry.id || index
+                      }
                       className="group hover:bg-blue-50/40 dark:hover:bg-blue-900/10 transition-all duration-200"
                     >
                       <td className="px-6 py-5">
@@ -527,7 +539,7 @@ export default function BikeSearch() {
                           </div>
                           <div className="min-w-0 flex-1">
                             <Link
-                              href={`/bikes/${definition?.id}`}
+                              href={`/bikes/${definition?.id}?size=${geometry.id}`}
                               className="text-sm font-bold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors block truncate"
                             >
                               {definition?.family?.brand_name}{" "}
@@ -761,7 +773,7 @@ export default function BikeSearch() {
                           </button>
 
                           <Link
-                            href={`/bikes/${geometry.id}`}
+                            href={`/bikes/${definition?.id}?size=${geometry.id}`}
                             className="flex items-center justify-center w-9 h-9 bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 rounded-xl hover:bg-white dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-600 hover:shadow-sm"
                             title="View Details"
                           >

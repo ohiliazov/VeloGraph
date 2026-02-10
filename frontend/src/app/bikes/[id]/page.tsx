@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import BikeFrameSVG from "../../../components/BikeFrameSVG";
 import { FrameDefinition } from "../../../types";
@@ -10,8 +10,9 @@ import { useComparison } from "../../../context/ComparisonContext";
 import LanguageSwitcher from "../../../components/LanguageSwitcher";
 import { useRouter } from "next/navigation";
 
-export default function BikeDetailPage() {
+function BikeDetailContent() {
   const { id } = useParams();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { t } = useLanguage();
   const { addToCompare, removeFromCompare, isInComparison, comparisonList } =
@@ -34,9 +35,13 @@ export default function BikeDetailPage() {
         const data: FrameDefinition = await res.json();
         setGroup(data);
         if (data.geometries && data.geometries.length > 0) {
-          // If the ID in URL is one of the geometries, select it, otherwise first one
-          const currentId = Number(id);
-          const found = data.geometries.find((g) => g.id === currentId);
+          // If the 'size' in URL is one of the geometries, select it
+          const sizeId = searchParams.get("size");
+          const targetId = sizeId ? Number(sizeId) : null;
+
+          const found = targetId
+            ? data.geometries.find((g) => g.id === targetId)
+            : null;
           setSelectedProductId(found ? found.id : data.geometries[0].id);
         }
       } catch (err) {
@@ -46,7 +51,7 @@ export default function BikeDetailPage() {
       }
     };
     fetchBike();
-  }, [id]);
+  }, [id, searchParams]);
 
   const handleDelete = async () => {
     if (!selectedProductId) return;
@@ -262,5 +267,13 @@ export default function BikeDetailPage() {
         </section>
       </div>
     </div>
+  );
+}
+
+export default function BikeDetailPage() {
+  return (
+    <Suspense fallback={<div className="text-center py-20">Loading...</div>}>
+      <BikeDetailContent />
+    </Suspense>
   );
 }
