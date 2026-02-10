@@ -31,7 +31,9 @@ repos:
     hooks:
       - id: uv-lock
       - id: uv-export
+        files: backend/pyproject.toml
         args:
+          - --project=backend
           - --no-hashes
           - --output-file=backend/requirements.txt
 

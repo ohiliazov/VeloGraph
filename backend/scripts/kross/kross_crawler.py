@@ -1,97 +1,38 @@
-from pathlib import Path
-
 from loguru import logger
-from playwright.sync_api import sync_playwright
-from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from backend.scripts.base import BaseBikeCrawler
 from backend.scripts.constants import artifacts_dir
 
-START_URL = "https://kross.pl/rowery"
-
 
 class KrossBikeCrawler(BaseBikeCrawler):
-    def __init__(self, url: str = START_URL, urls_path: Path | None = None):
-        brand_name = "kross"
-        urls_path = urls_path or (artifacts_dir / brand_name / "bike_urls.json")
-        super().__init__(brand_name=brand_name, start_url=url, urls_path=urls_path)
+    brand_name = "kross"
 
-    def get_slug_from_url(self, url: str) -> str:
-        return url.rstrip("/").split("/")[-1]
-
-    def collect_urls(self, max_retries: int = 3) -> list[str]:
+    def collect_page_urls(self, page) -> set[str]:
         urls: set[str] = set()
+        product_buttons = page.query_selector_all("div.products a.action.secondary")
+        for btn in product_buttons:
+            if href := btn.get_attribute("href"):
+                urls.add(href)
+        return urls
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+    def get_next_page_url(self, page) -> str | None:
+        next_btn = page.query_selector("a.action.next")
+        if next_btn and (next_href := next_btn.get_attribute("href")):
+            logger.debug("➡️ Navigating to next catalog page: {}", next_href)
+            return next_href
+        return None
 
-            # Block images and fonts to speed up
-            page.route(
-                "**/*",
-                lambda r: r.abort() if r.request.resource_type in ["image", "font"] else r.continue_(),
-            )
 
-            # Start at main catalog page
-            logger.info("🌐 Opening Kross catalog page: {}", self.start_url)
-
-            @retry(
-                stop=stop_after_attempt(max_retries),
-                wait=wait_exponential(multiplier=1, min=2, max=10),
-                retry=retry_if_exception_type(Exception),
-                before_sleep=before_sleep_log(logger, "WARNING"),
-                reraise=True,
-            )
-            def _open_catalog():
-                page.goto(self.start_url, wait_until="networkidle", timeout=60000)
-
-            try:
-                _open_catalog()
-            except Exception:
-                logger.error("❌ Failed to open Kross catalog after {} attempts", max_retries)
-                browser.close()
-                return []
-
-            while True:
-                # --- Extract all bike URLs on this page ---
-                product_buttons = page.query_selector_all("div.products a.action.secondary")
-                for btn in product_buttons:
-                    if href := btn.get_attribute("href"):
-                        urls.add(href)
-
-                logger.info(
-                    "🔎 Found {} bikes on this page, total unique collected: {}",
-                    len(product_buttons),
-                    len(urls),
-                )
-
-                # --- Find next page button ---
-                next_btn = page.query_selector("a.action.next")
-                if next_btn and (next_href := next_btn.get_attribute("href")):
-                    logger.debug("➡️ Navigating to next catalog page: {}", next_href)
-
-                    @retry(
-                        stop=stop_after_attempt(max_retries),
-                        wait=wait_exponential(multiplier=1, min=2, max=10),
-                        retry=retry_if_exception_type(Exception),
-                        before_sleep=before_sleep_log(logger, "WARNING"),
-                        reraise=True,
-                    )
-                    def _goto_next(url=next_href):
-                        page.goto(url, wait_until="networkidle", timeout=60000)
-
-                    try:
-                        _goto_next()
-                        continue
-                    except Exception:
-                        logger.error(
-                            "❌ Failed to navigate to next catalog page after {} attempts: {}", max_retries, next_href
-                        )
-                        break
-
-                logger.info("🛑 No more catalog pages detected. Stopping pagination.")
-                break
-
-            browser.close()
-
-        return sorted(urls)
+if __name__ == "__main__":
+    BIKE_START_URLS = {
+        "https://kross.pl/rowery/rowery-szosowe": "road",
+        "https://kross.pl/rowery/rowery-gravel": "gravel",
+        "https://kross.pl/rowery/rowery-gorskie": "mtb",
+        "https://kross.pl/rowery/rowery-turystyczne": "touring",
+        "https://kross.pl/rowery/rowery-miejskie": "city",
+        "https://kross.pl/rowery/rowery-damskie": "women",
+        "https://kross.pl/rowery/rowery-dla-dzieci": "kids",
+    }
+    for start_url, _category in BIKE_START_URLS.items():
+        crawler = KrossBikeCrawler(start_url, artifacts_dir / "kross" / "bike_urls.json")
+        crawler.run()

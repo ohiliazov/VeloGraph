@@ -1,9 +1,6 @@
-from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 from loguru import logger
-from playwright.sync_api import sync_playwright
-from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from backend.scripts.base import BaseBikeCrawler
 from backend.scripts.constants import artifacts_dir
@@ -13,10 +10,7 @@ BASE_URL = "https://www.trekbikes.com"
 
 
 class TrekBikeCrawler(BaseBikeCrawler):
-    def __init__(self, url: str = START_URL, urls_path: Path | None = None):
-        brand_name = "trek"
-        urls_path = urls_path or (artifacts_dir / brand_name / "bike_urls.json")
-        super().__init__(brand_name=brand_name, start_url=url, urls_path=urls_path)
+    brand_name = "trek"
 
     def normalize_url(self, href: str) -> str:
         href = href.strip()
@@ -29,86 +23,47 @@ class TrekBikeCrawler(BaseBikeCrawler):
         path = parsed.path.rstrip("/")
         return path.split("/")[-3] + "__" + path.split("/")[-1]
 
-    def collect_urls(self, max_retries: int = 3) -> list[str]:
+    def collect_page_urls(self, page) -> set[str]:
         urls: set[str] = set()
+        anchors = page.query_selector_all("ul li article div h3 a")
+        for a in anchors:
+            href = a.get_attribute("href")
+            if not href:
+                continue
+            url = self.normalize_url(href)
+            urls.add(url)
+        return urls
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+    def get_next_page_url(self, page) -> str | None:
+        next_a = page.query_selector("a#search-page-next")
+        if next_a:
+            next_href = next_a.get_attribute("href")
+            if next_href:
+                next_url = self.normalize_url(next_href)
+                logger.debug("➡️ Navigating to next catalog page: {}", next_url)
+                return next_url
+        return None
 
-            # Block images and fonts to speed up crawling
-            page.route(
-                "**/*",
-                lambda r: r.abort() if r.request.resource_type in ["image", "font", "media"] else r.continue_(),
-            )
 
-            logger.info("🌐 Opening Trek catalog page: {}", self.start_url)
+if __name__ == "__main__":
+    BASE_URL = "https://www.trekbikes.com/pl/pl_PL/rowery"
+    BIKE_START_URLS = {
+        f"{BASE_URL}/rowery-szosowe/rowery-szosowe-wyczynowe/c/B260/": "road",
+        f"{BASE_URL}/rowery-szosowe/rowery-gravel/rowery-gravel-z-kierownicami-szosowymi/c/B562/": "gravel",
+        f"{BASE_URL}/rowery-szosowe/rowery-gravel/rowery-all-road/c/B564/": "gravel",
+        f"{BASE_URL}/rowery-szosowe/rowery-gravel/elektryczne-rowery-gravel/c/B561/": "gravel",
+        f"{BASE_URL}/rowery-szosowe/rowery-prze%C5%82ajowe/c/B240/": "gravel",
+        f"{BASE_URL}/rowery-szosowe/rowery-triathlonowe/c/B230/": "triathlon",
+        f"{BASE_URL}/rowery-g%C3%B3rskie/c/B300/": "mtb",
+        f"{BASE_URL}/rowery-hybrydowe/c/B528/": "city",
+        f"{BASE_URL}/rowery-szosowe/damskie-rowery-szosowe/c/B522/": "women",
+        f"{BASE_URL}/rowery-hybrydowe/damskie-rowery-miejskie/c/B521/": "women",
+        f"{BASE_URL}/rowery-hybrydowe/damskie-rowery-crossowe/c/B526/": "women",
+        f"{BASE_URL}/rowery-dla-dzieci/c/B506/": "kids",
+        f"{BASE_URL}/rowery-elektryczne/c/B507/": "electric",
+        f"{BASE_URL}/elektryczne-rowery-hybrydowe/c/B550/": "electric",
+    }
 
-            @retry(
-                stop=stop_after_attempt(max_retries),
-                wait=wait_exponential(multiplier=1, min=2, max=10),
-                retry=retry_if_exception_type(Exception),
-                before_sleep=before_sleep_log(logger, "WARNING"),
-                reraise=True,
-            )
-            def _open_catalog():
-                page.goto(self.start_url, wait_until="load", timeout=60000)
-
-            try:
-                _open_catalog()
-            except Exception:
-                logger.error("❌ Failed to open Trek catalog after {} attempts", max_retries)
-                browser.close()
-                return []
-
-            while True:
-                # Extract all product links using qaid="productCardProductName" > a
-                anchors = page.query_selector_all('[qaid="productCardProductName"] a')
-                for a in anchors:
-                    href = a.get_attribute("href")
-                    if not href:
-                        continue
-                    url = self.normalize_url(href)
-                    urls.add(url)
-
-                logger.info(
-                    "🔎 Found {} bikes on this page, total unique collected: {}",
-                    len(anchors),
-                    len(urls),
-                )
-
-                # Next page via a#search-page-next
-                next_a = page.query_selector("a#search-page-next")
-                if next_a:
-                    next_href = next_a.get_attribute("href")
-                    if next_href:
-                        next_url = self.normalize_url(next_href)
-                        logger.debug("➡️ Navigating to next catalog page: {}", next_url)
-
-                        @retry(
-                            stop=stop_after_attempt(max_retries),
-                            wait=wait_exponential(multiplier=1, min=2, max=10),
-                            retry=retry_if_exception_type(Exception),
-                            before_sleep=before_sleep_log(logger, "WARNING"),
-                            reraise=True,
-                        )
-                        def _goto_next(url=next_url):
-                            page.goto(url, wait_until="load", timeout=60000)
-
-                        try:
-                            _goto_next()
-                            continue
-                        except Exception:
-                            logger.error(
-                                "❌ Failed to navigate to next catalog page after {} attempts: {}",
-                                max_retries,
-                                next_url,
-                            )
-                            break  # Stop pagination on failure
-
-                logger.info("🛑 No more catalog pages detected. Stopping pagination.")
-                break
-
-            browser.close()
-
-        return sorted(urls)
+    for start_url, _category in BIKE_START_URLS.items():
+        crawler = TrekBikeCrawler(start_url, artifacts_dir / "trek" / "bike_urls.json")
+        crawler.run()
