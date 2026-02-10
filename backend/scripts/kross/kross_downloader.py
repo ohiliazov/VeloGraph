@@ -5,7 +5,7 @@ from backend.scripts.constants import artifacts_dir
 
 
 class KrossDownloader(BaseDownloader):
-    braco_url = "kross"
+    brand_name = "kross"
 
     def get_slug_from_url(self) -> str:
         return self.input_url.rstrip("/").split("/")[-1]

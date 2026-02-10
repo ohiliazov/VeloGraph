@@ -58,11 +58,13 @@ class TrekDownloader(BaseDownloader):
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
             target_url = API_BASE.format(pid=pid)
-            logger.info(f"Downloading sizing JSON {target_url}")
+            logger.info("📥 Downloading sizing JSON: {}", target_url)
             resp = page.request.get(target_url, timeout=15000)
             if not resp.ok:
+                logger.error("❌ Bad status {} for {}", resp.status, target_url)
                 raise Exception(f"Bad status {resp.status} for {target_url}")
             self._save_file(json.dumps(resp.json(), ensure_ascii=False), json_path)
+            logger.success("✅ Saved sizing JSON: {}", json_path.name)
 
     def run(self):
         super().run()

@@ -24,6 +24,7 @@ class BaseDownloader:
 
     def _save_file(self, content: str, file_path: Path):
         file_path.write_text(content, encoding="utf-8")
+        logger.debug("💾 File saved: {}", file_path)
 
     def get_slug_from_url(self) -> str:
         raise NotImplementedError("get_slug_from_url() must be implemented by subclasses")
@@ -40,8 +41,10 @@ class BaseDownloader:
             page = browser.new_page()
             # Block heavy resources
             page.route("**/*", route_resource_type_handler)
+            logger.debug("🌐 Navigating to {}", self.input_url)
             page.goto(self.input_url, wait_until="load", timeout=30000)
             self._save_file(page.content(), html_path)
+            logger.success("✅ Downloaded and saved: {}", html_path.name)
 
     @retry(
         stop=stop_after_attempt(3),

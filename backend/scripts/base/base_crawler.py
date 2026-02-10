@@ -53,10 +53,11 @@ class BaseBikeCrawler:
                 page = browser.new_page()
                 page.route("**/*", handler=route_resource_type_handler)
 
-                logger.info(f"🌐 Opening {self.brand_name.upper()} catalog page: {self.start_url}")
+                logger.info("🌐 Opening {} catalog page: {}", self.brand_name.upper(), self.start_url)
                 current_page_url = self.start_url
 
                 while current_page_url:
+                    logger.info("📄 Fetching page: {}", current_page_url)
                     self.goto_page(page, current_page_url)
 
                     page_urls = self.collect_page_urls(page)
@@ -69,6 +70,10 @@ class BaseBikeCrawler:
                     )
 
                     current_page_url = self.get_next_page_url(page)
+                    if current_page_url:
+                        logger.info("➡️ Next page found: {}", current_page_url)
+                    else:
+                        logger.info("🏁 No more pages to crawl.")
             finally:
                 browser.close()
 
