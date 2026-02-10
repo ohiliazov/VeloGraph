@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Bike, Geometry } from "../../../../types";
+import { FrameDefinition, GeometrySpec } from "../../../../types";
 import { useLanguage } from "../../../../context/LanguageContext";
 import LanguageSwitcher from "../../../../components/LanguageSwitcher";
 
@@ -11,7 +11,7 @@ export default function BikeEditPage() {
   const { id } = useParams();
   const router = useRouter();
   const { t } = useLanguage();
-  const [bike, setBike] = useState<Bike | null>(null);
+  const [bike, setBike] = useState<FrameDefinition | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,9 +19,11 @@ export default function BikeEditPage() {
   useEffect(() => {
     const fetchBike = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/bikes/${id}`);
+        const res = await fetch(
+          `http://localhost:8000/api/bikes/definitions/${id}`,
+        );
         if (!res.ok) throw new Error("Failed to fetch bike details");
-        const data = await res.json();
+        const data: FrameDefinition = await res.json();
         setBike(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred");
@@ -42,10 +44,10 @@ export default function BikeEditPage() {
 
   const handleGeometryChange = (
     index: number,
-    field: keyof Geometry,
-    value: string | number | string[],
+    field: keyof GeometrySpec,
+    value: string | number,
   ) => {
-    if (!bike) return;
+    if (!bike || !bike.geometries) return;
     const newGeometries = [...bike.geometries];
     newGeometries[index] = { ...newGeometries[index], [field]: value };
     setBike({ ...bike, geometries: newGeometries });
@@ -56,11 +58,19 @@ export default function BikeEditPage() {
     if (!bike) return;
     setSaving(true);
     try {
-      const res = await fetch(`http://localhost:8000/api/bikes/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bike),
-      });
+      const res = await fetch(
+        `http://localhost:8000/api/bikes/definitions/${id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: bike.name,
+            material: bike.material,
+            year_start: bike.year_start,
+            year_end: bike.year_end,
+          }),
+        },
+      );
       if (!res.ok) throw new Error("Failed to save bike details");
       router.push(`/bikes/${id}`);
     } catch (err) {
@@ -93,7 +103,7 @@ export default function BikeEditPage() {
         </div>
 
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
-          {t.ui.edit} {bike.brand} {bike.model_name}
+          {t.ui.edit} {bike.family?.brand_name} {bike.name}
         </h1>
 
         <form onSubmit={handleSave} className="space-y-8">
@@ -106,14 +116,9 @@ export default function BikeEditPage() {
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t.ui.brand}
                 </label>
-                <input
-                  type="text"
-                  name="brand"
-                  value={bike.brand}
-                  onChange={handleInputChange}
-                  className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
-                  required
-                />
+                <div className="w-full p-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded dark:text-gray-400">
+                  {bike.family?.brand_name}
+                </div>
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -121,8 +126,8 @@ export default function BikeEditPage() {
                 </label>
                 <input
                   type="text"
-                  name="model_name"
-                  value={bike.model_name}
+                  name="name"
+                  value={bike.name}
                   onChange={handleInputChange}
                   className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                   required
@@ -134,8 +139,8 @@ export default function BikeEditPage() {
                 </label>
                 <input
                   type="number"
-                  name="model_year"
-                  value={bike.model_year || ""}
+                  name="year_start"
+                  value={bike.year_start || ""}
                   onChange={handleInputChange}
                   className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                 />
@@ -158,8 +163,8 @@ export default function BikeEditPage() {
                 </label>
                 <input
                   type="text"
-                  name="frame_material"
-                  value={bike.frame_material || ""}
+                  name="material"
+                  value={bike.material || ""}
                   onChange={handleInputChange}
                   className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                 />
@@ -195,14 +200,15 @@ export default function BikeEditPage() {
                 <input
                   type="text"
                   name="categories"
-                  value={bike.categories.join(", ")}
+                  value={bike.family?.category || ""}
                   onChange={(e) => {
                     const value = e.target.value;
-                    const cats = value
-                      .split(",")
-                      .map((c) => c.trim())
-                      .filter((c) => c !== "");
-                    setBike({ ...bike, categories: cats });
+                    if (bike.family) {
+                      setBike({
+                        ...bike,
+                        family: { ...bike.family, category: value },
+                      });
+                    }
                   }}
                   className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                 />
@@ -211,27 +217,17 @@ export default function BikeEditPage() {
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t.ui.source_page} (URL)
                 </label>
-                <input
-                  type="url"
-                  name="source_url"
-                  value={bike.source_url || ""}
-                  onChange={handleInputChange}
-                  className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
-                  placeholder="https://..."
-                />
+                <div className="w-full p-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded dark:text-gray-400">
+                  N/A
+                </div>
               </div>
               <div className="space-y-1">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t.ui.max_tire_width} (mm)
                 </label>
-                <input
-                  type="number"
-                  name="max_tire_width"
-                  value={bike.max_tire_width || ""}
-                  onChange={handleInputChange}
-                  className="w-full p-2 bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
-                  placeholder="e.g. 45"
-                />
+                <div className="w-full p-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded dark:text-gray-400">
+                  N/A
+                </div>
               </div>
             </div>
           </section>
@@ -275,7 +271,7 @@ export default function BikeEditPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                {bike.geometries.map((geo, index) => (
+                {bike.geometries?.map((geo, index) => (
                   <tr key={index}>
                     <td className="py-2 px-1">
                       <input
@@ -294,11 +290,11 @@ export default function BikeEditPage() {
                     <td className="py-2 px-1">
                       <input
                         type="number"
-                        value={geo.stack}
+                        value={geo.stack_mm}
                         onChange={(e) =>
                           handleGeometryChange(
                             index,
-                            "stack",
+                            "stack_mm",
                             parseInt(e.target.value) || 0,
                           )
                         }
@@ -308,11 +304,11 @@ export default function BikeEditPage() {
                     <td className="py-2 px-1">
                       <input
                         type="number"
-                        value={geo.reach}
+                        value={geo.reach_mm}
                         onChange={(e) =>
                           handleGeometryChange(
                             index,
-                            "reach",
+                            "reach_mm",
                             parseInt(e.target.value) || 0,
                           )
                         }
@@ -322,11 +318,11 @@ export default function BikeEditPage() {
                     <td className="py-2 px-1">
                       <input
                         type="number"
-                        value={geo.top_tube_effective_length}
+                        value={geo.top_tube_effective_mm || 0}
                         onChange={(e) =>
                           handleGeometryChange(
                             index,
-                            "top_tube_effective_length",
+                            "top_tube_effective_mm",
                             parseInt(e.target.value) || 0,
                           )
                         }
@@ -336,11 +332,11 @@ export default function BikeEditPage() {
                     <td className="py-2 px-1">
                       <input
                         type="number"
-                        value={geo.seat_tube_length}
+                        value={geo.seat_tube_length_mm || 0}
                         onChange={(e) =>
                           handleGeometryChange(
                             index,
-                            "seat_tube_length",
+                            "seat_tube_length_mm",
                             parseInt(e.target.value) || 0,
                           )
                         }
@@ -350,11 +346,11 @@ export default function BikeEditPage() {
                     <td className="py-2 px-1">
                       <input
                         type="number"
-                        value={geo.head_tube_length}
+                        value={geo.head_tube_length_mm || 0}
                         onChange={(e) =>
                           handleGeometryChange(
                             index,
-                            "head_tube_length",
+                            "head_tube_length_mm",
                             parseInt(e.target.value) || 0,
                           )
                         }
@@ -364,11 +360,11 @@ export default function BikeEditPage() {
                     <td className="py-2 px-1">
                       <input
                         type="number"
-                        value={geo.chainstay_length}
+                        value={geo.chainstay_length_mm}
                         onChange={(e) =>
                           handleGeometryChange(
                             index,
-                            "chainstay_length",
+                            "chainstay_length_mm",
                             parseInt(e.target.value) || 0,
                           )
                         }
@@ -408,11 +404,11 @@ export default function BikeEditPage() {
                     <td className="py-2 px-1">
                       <input
                         type="number"
-                        value={geo.bb_drop}
+                        value={geo.bb_drop_mm}
                         onChange={(e) =>
                           handleGeometryChange(
                             index,
-                            "bb_drop",
+                            "bb_drop_mm",
                             parseInt(e.target.value) || 0,
                           )
                         }
@@ -422,11 +418,11 @@ export default function BikeEditPage() {
                     <td className="py-2 px-1">
                       <input
                         type="number"
-                        value={geo.wheelbase}
+                        value={geo.wheelbase_mm}
                         onChange={(e) =>
                           handleGeometryChange(
                             index,
-                            "wheelbase",
+                            "wheelbase_mm",
                             parseInt(e.target.value) || 0,
                           )
                         }

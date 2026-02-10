@@ -47,6 +47,7 @@ export interface FrameDefinition {
   year_end: number | null;
   material: string | null;
   family?: BikeFamily;
+  geometries?: GeometrySpec[];
 }
 
 export interface BikeFamily {
@@ -112,10 +113,10 @@ export interface Bike {
 
 export interface SearchResult {
   total: number;
-  items: BikeProduct[];
+  items: GeometrySpec[];
 }
 
 export interface GroupedSearchResult {
   total: number;
-  items: BikeGroup[];
+  items: FrameDefinition[];
 }

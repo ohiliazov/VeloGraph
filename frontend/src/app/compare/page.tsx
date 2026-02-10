@@ -50,10 +50,8 @@ export default function ComparisonPage() {
 
   const isDifferent = (key: keyof GeometrySpec) => {
     if (comparisonList.length < 2) return false;
-    const firstValue = comparisonList[0].product.geometry_spec[key];
-    return comparisonList.some(
-      (item) => item.product.geometry_spec[key] !== firstValue,
-    );
+    const firstValue = comparisonList[0].geometry[key];
+    return comparisonList.some((item) => item.geometry[key] !== firstValue);
   };
 
   const filteredKeys = showOnlyDifferences
@@ -115,25 +113,23 @@ export default function ComparisonPage() {
                         <div className="flex justify-between items-start">
                           <div>
                             <p className="text-gray-900 dark:text-white font-bold normal-case text-base">
-                              {item.product.geometry_spec.size_label}
+                              {item.geometry.definition?.family?.brand_name}{" "}
+                              {item.geometry.definition?.family?.family_name}
                             </p>
                             <p className="text-gray-500 dark:text-gray-400 font-medium normal-case">
                               {t.geometry.size_label}:{" "}
-                              {item.product.geometry_spec.size_label}
+                              {item.geometry.size_label}
                             </p>
                           </div>
                           <button
-                            onClick={() => removeFromCompare(item.product.id)}
+                            onClick={() => removeFromCompare(item.geometry.id)}
                             className="text-red-400 hover:text-red-600 p-1"
                           >
                             ✕
                           </button>
                         </div>
                         <div className="bg-gray-50 dark:bg-gray-800 rounded p-2 flex justify-center">
-                          <BikeFrameSVG
-                            geometry={item.product.geometry_spec}
-                            height={70}
-                          />
+                          <BikeFrameSVG geometry={item.geometry} height={70} />
                         </div>
                       </div>
                     </th>
@@ -144,53 +140,14 @@ export default function ComparisonPage() {
                 {/* Basic Info */}
                 <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                   <td className="py-3 px-6 font-medium text-gray-500 dark:text-gray-400 bg-gray-50/30 dark:bg-gray-800/10 border-r dark:border-gray-800 sticky left-0 z-10">
-                    SKU
+                    {t.ui.material}
                   </td>
                   {comparisonList.map((item, idx) => (
                     <td
                       key={idx}
                       className="py-3 px-6 border-r dark:border-gray-800 text-xs dark:text-gray-300"
                     >
-                      {item.product.sku}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                  <td className="py-3 px-6 font-medium text-gray-500 dark:text-gray-400 bg-gray-50/30 dark:bg-gray-800/10 border-r dark:border-gray-800 sticky left-0 z-10">
-                    {t.ui.groupset}
-                  </td>
-                  {comparisonList.map((item, idx) => (
-                    <td
-                      key={idx}
-                      className="py-3 px-6 border-r dark:border-gray-800 text-xs dark:text-gray-300"
-                    >
-                      {item.product.build_kit.groupset || "-"}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                  <td className="py-3 px-6 font-medium text-gray-500 dark:text-gray-400 bg-gray-50/30 dark:bg-gray-800/10 border-r dark:border-gray-800 sticky left-0 z-10">
-                    {t.ui.wheelset}
-                  </td>
-                  {comparisonList.map((item, idx) => (
-                    <td
-                      key={idx}
-                      className="py-3 px-6 border-r dark:border-gray-800 text-xs dark:text-gray-300"
-                    >
-                      {item.product.build_kit.wheelset || "-"}
-                    </td>
-                  ))}
-                </tr>
-                <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                  <td className="py-3 px-6 font-medium text-gray-500 dark:text-gray-400 bg-gray-50/30 dark:bg-gray-800/10 border-r dark:border-gray-800 sticky left-0 z-10">
-                    {t.ui.tires}
-                  </td>
-                  {comparisonList.map((item, idx) => (
-                    <td
-                      key={idx}
-                      className="py-3 px-6 border-r dark:border-gray-800 text-xs dark:text-gray-300"
-                    >
-                      {item.product.build_kit.tires || "-"}
+                      {item.geometry.definition?.material || "-"}
                     </td>
                   ))}
                 </tr>
@@ -214,9 +171,9 @@ export default function ComparisonPage() {
                         }`}
                       >
                         {
-                          item.product.geometry_spec[
-                            key as keyof typeof item.product.geometry_spec
-                          ] as string | number
+                          item.geometry[key as keyof typeof item.geometry] as
+                            | string
+                            | number
                         }
                         {String(key).includes("angle") ? "°" : " mm"}
                       </td>

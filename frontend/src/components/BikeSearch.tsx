@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import BikeFrameSVG from "./BikeFrameSVG";
 import {
-  BikeGroup,
-  BikeProduct,
+  FrameDefinition,
+  GeometrySpec,
   SearchResult,
   GroupedSearchResult,
   BikeCategory,
@@ -26,7 +26,9 @@ export default function BikeSearch() {
   const [activeTab, setActiveTab] = useState<"geometry" | "keyword">(
     "geometry",
   );
-  const [results, setResults] = useState<BikeProduct[] | BikeGroup[]>([]);
+  const [results, setResults] = useState<GeometrySpec[] | FrameDefinition[]>(
+    [],
+  );
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -84,10 +86,10 @@ export default function BikeSearch() {
 
         // Initialize size selection for groups
         const initialSelection: Record<string, number> = {};
-        data.items?.forEach((group) => {
-          const groupKey = `${group.family.family_name}-${group.definition.name}-${group.build_kit.id}`;
-          if (group.products.length > 0) {
-            initialSelection[groupKey] = group.products[0].id;
+        data.items?.forEach((item) => {
+          const groupKey = `${item.family?.family_name}-${item.name}`;
+          if (item.geometries && item.geometries.length > 0) {
+            initialSelection[groupKey] = item.geometries[0].id;
           }
         });
         setSelectedProductIds((prev) => ({ ...prev, ...initialSelection }));
@@ -445,13 +447,13 @@ export default function BikeSearch() {
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800 table-fixed">
               <thead className="bg-gray-50/50 dark:bg-gray-800/50">
                 <tr>
-                  <th className="w-[32%] px-6 py-4 text-left text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="w-[45%] px-6 py-4 text-left text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     {t.ui.brand} / {t.ui.model}
                   </th>
-                  <th className="w-[12%] px-4 py-4 text-center text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="w-[15%] px-4 py-4 text-center text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     {t.geometry.size_label}
                   </th>
-                  <th className="w-[16%] px-4 py-4 text-left text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="w-[20%] px-4 py-4 text-left text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Geometry (S/R)
                   </th>
                   {activeTab === "geometry" && (
@@ -459,30 +461,34 @@ export default function BikeSearch() {
                       Target Fit
                     </th>
                   )}
-                  <th className="w-[15%] px-6 py-4 text-right text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="w-[20%] px-6 py-4 text-right text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     {t.ui.actions || "Actions"}
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800 bg-white dark:bg-gray-900">
                 {results.map((item) => {
-                  const isGroup = "products" in item;
+                  const isGroup = "geometries" in item;
                   const groupKey = isGroup
-                    ? `${item.family.family_name}-${item.definition.name}-${item.build_kit.id}`
+                    ? `${item.family?.family_name}-${item.name}`
                     : "";
                   const selectedId = isGroup
-                    ? selectedProductIds[groupKey] || item.products[0]?.id
-                    : (item as BikeProduct).id;
-                  const product = isGroup
-                    ? item.products.find((p) => p.id === selectedId) ||
-                      item.products[0]
-                    : (item as BikeProduct);
+                    ? selectedProductIds[groupKey] || item.geometries?.[0]?.id
+                    : (item as GeometrySpec).id;
+                  const geometry = isGroup
+                    ? item.geometries?.find((g) => g.id === selectedId) ||
+                      item.geometries?.[0]
+                    : (item as GeometrySpec);
 
-                  if (!product) return null;
+                  if (!geometry) return null;
 
-                  const isProductInComparison = isInComparison(product.id);
-                  const sDiff = product.geometry_spec.stack_mm - Number(stack);
-                  const rDiff = product.geometry_spec.reach_mm - Number(reach);
+                  const definition = isGroup
+                    ? (item as FrameDefinition)
+                    : (item as GeometrySpec).definition;
+
+                  const isProductInComparison = isInComparison(geometry.id);
+                  const sDiff = geometry.stack_mm - Number(stack);
+                  const rDiff = geometry.reach_mm - Number(reach);
 
                   // Visualization range based on average size differences
                   const RANGE = 20;
@@ -517,35 +523,22 @@ export default function BikeSearch() {
                       <td className="px-6 py-5">
                         <div className="flex items-center gap-4">
                           <div className="flex-shrink-0 h-14 w-20 bg-gray-50 dark:bg-gray-800 rounded-xl flex items-center justify-center p-2 group-hover:bg-white dark:group-hover:bg-gray-700 transition-all border border-gray-100 dark:border-gray-700 group-hover:border-blue-100 dark:group-hover:border-blue-900 group-hover:shadow-sm">
-                            <BikeFrameSVG
-                              geometry={product.geometry_spec}
-                              height={44}
-                            />
+                            <BikeFrameSVG geometry={geometry} height={44} />
                           </div>
                           <div className="min-w-0 flex-1">
                             <Link
-                              href={`/bikes/${product.id}`}
+                              href={`/bikes/${geometry.id}`}
                               className="text-sm font-bold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors block truncate"
                             >
-                              {
-                                product.geometry_spec.definition?.family
-                                  ?.brand_name
-                              }{" "}
-                              {
-                                product.geometry_spec.definition?.family
-                                  ?.family_name
-                              }
+                              {definition?.family?.brand_name}{" "}
+                              {definition?.family?.family_name}
                             </Link>
                             <div className="flex flex-wrap items-center gap-2 mt-1.5">
                               <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">
-                                {product.geometry_spec.definition?.name}
+                                {definition?.name}
                               </span>
                               <span className="text-[10px] font-extrabold text-blue-500 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/30 px-2 py-0.5 rounded-md uppercase tracking-wider border border-blue-100/50 dark:border-blue-900/50">
-                                {product.geometry_spec.definition?.material ||
-                                  "N/A"}
-                              </span>
-                              <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 truncate max-w-[120px]">
-                                {product.build_kit.name}
+                                {definition?.material || "N/A"}
                               </span>
                             </div>
                           </div>
@@ -554,28 +547,28 @@ export default function BikeSearch() {
                       <td className="px-6 py-5 text-center">
                         {isGroup ? (
                           <div className="flex flex-wrap justify-center gap-1.5">
-                            {(item as BikeGroup).products.map((p) => (
+                            {(item as FrameDefinition).geometries?.map((g) => (
                               <button
-                                key={p.id}
+                                key={g.id}
                                 onClick={() =>
                                   setSelectedProductIds((prev) => ({
                                     ...prev,
-                                    [groupKey]: p.id,
+                                    [groupKey]: g.id,
                                   }))
                                 }
                                 className={`min-w-[32px] px-1.5 py-0.5 text-[10px] font-bold rounded-md transition-all ${
-                                  selectedId === p.id
+                                  selectedId === g.id
                                     ? "bg-blue-600 text-white shadow-sm ring-2 ring-blue-600/20 scale-105"
                                     : "bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-700 dark:hover:text-gray-200 border border-gray-200 dark:border-gray-700"
                                 }`}
                               >
-                                {p.geometry_spec.size_label}
+                                {g.size_label}
                               </button>
                             ))}
                           </div>
                         ) : (
                           <span className="inline-flex items-center justify-center min-w-[32px] px-2 py-1 text-[11px] font-black rounded-lg bg-gray-900 dark:bg-gray-700 text-white shadow-sm">
-                            {product.geometry_spec.size_label}
+                            {geometry.size_label}
                           </span>
                         )}
                       </td>
@@ -586,7 +579,7 @@ export default function BikeSearch() {
                               S
                             </span>
                             <span className="text-sm font-bold text-gray-800 dark:text-gray-200 tabular-nums">
-                              {product.geometry_spec.stack_mm}
+                              {geometry.stack_mm}
                             </span>
                             <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
                               mm
@@ -597,7 +590,7 @@ export default function BikeSearch() {
                               R
                             </span>
                             <span className="text-sm font-bold text-gray-800 dark:text-gray-200 tabular-nums">
-                              {product.geometry_spec.reach_mm}
+                              {geometry.reach_mm}
                             </span>
                             <span className="text-[10px] text-gray-400 dark:text-gray-500 font-medium">
                               mm
@@ -734,8 +727,8 @@ export default function BikeSearch() {
                           <button
                             onClick={() =>
                               isProductInComparison
-                                ? removeFromCompare(product.id)
-                                : addToCompare(product)
+                                ? removeFromCompare(geometry.id)
+                                : addToCompare(geometry)
                             }
                             className={`flex items-center justify-center w-9 h-9 rounded-xl transition-all ${
                               isProductInComparison
@@ -768,7 +761,7 @@ export default function BikeSearch() {
                           </button>
 
                           <Link
-                            href={`/bikes/${product.id}`}
+                            href={`/bikes/${geometry.id}`}
                             className="flex items-center justify-center w-9 h-9 bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 rounded-xl hover:bg-white dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-600 hover:shadow-sm"
                             title="View Details"
                           >
@@ -786,30 +779,6 @@ export default function BikeSearch() {
                               />
                             </svg>
                           </Link>
-
-                          {product.source_url && (
-                            <a
-                              href={product.source_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center justify-center w-9 h-9 bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 rounded-xl hover:bg-white dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400 transition-all border border-transparent hover:border-gray-200 dark:hover:border-gray-600 hover:shadow-sm"
-                              title={t.ui.source_page}
-                            >
-                              <svg
-                                className="w-5 h-5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth="2"
-                                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                                />
-                              </svg>
-                            </a>
-                          )}
                         </div>
                       </td>
                     </tr>

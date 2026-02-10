@@ -1,18 +1,18 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { BikeProduct } from "@/types";
+import { GeometrySpec } from "@/types";
 
 export interface ComparisonItem {
-  product: BikeProduct;
+  geometry: GeometrySpec;
 }
 
 interface ComparisonContextType {
   comparisonList: ComparisonItem[];
-  addToCompare: (product: BikeProduct) => void;
-  removeFromCompare: (productId: number) => void;
+  addToCompare: (geometry: GeometrySpec) => void;
+  removeFromCompare: (geometryId: number) => void;
   clearComparison: () => void;
-  isInComparison: (productId: number) => boolean;
+  isInComparison: (geometryId: number) => boolean;
 }
 
 const ComparisonContext = createContext<ComparisonContextType | undefined>(
@@ -37,10 +37,9 @@ export const ComparisonProvider: React.FC<{ children: React.ReactNode }> = ({
               (item) =>
                 item &&
                 typeof item === "object" &&
-                item.product &&
-                typeof item.product.id === "number" &&
-                item.product.geometry_spec &&
-                typeof item.product.geometry_spec.size_label === "string",
+                item.geometry &&
+                typeof item.geometry.id === "number" &&
+                typeof item.geometry.size_label === "string",
             );
             setComparisonList(validated);
           }
@@ -58,18 +57,18 @@ export const ComparisonProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [comparisonList, isInitialized]);
 
-  const addToCompare = (product: BikeProduct) => {
+  const addToCompare = (geometry: GeometrySpec) => {
     setComparisonList((prev) => {
-      if (prev.some((item) => item.product.id === product.id)) {
+      if (prev.some((item) => item.geometry.id === geometry.id)) {
         return prev;
       }
-      return [...prev, { product }];
+      return [...prev, { geometry }];
     });
   };
 
-  const removeFromCompare = (productId: number) => {
+  const removeFromCompare = (geometryId: number) => {
     setComparisonList((prev) =>
-      prev.filter((item) => item.product.id !== productId),
+      prev.filter((item) => item.geometry.id !== geometryId),
     );
   };
 
@@ -77,8 +76,8 @@ export const ComparisonProvider: React.FC<{ children: React.ReactNode }> = ({
     setComparisonList([]);
   };
 
-  const isInComparison = (productId: number) => {
-    return comparisonList.some((item) => item?.product?.id === productId);
+  const isInComparison = (geometryId: number) => {
+    return comparisonList.some((item) => item?.geometry?.id === geometryId);
   };
 
   return (

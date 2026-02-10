@@ -87,17 +87,59 @@ export default function NewBikePage() {
     try {
       // Use arbitrary user_id as requested
       const payload = { ...bike, user_id: "user_123", source_url: "" };
-      const res = await fetch(`http://localhost:8000/api/bikes/`, {
+      const res = await fetch(`http://localhost:8000/api/bikes/families`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          brand_name: bike.brand,
+          family_name: bike.model_name,
+          category: bike.categories?.[0] || "other",
+        }),
       });
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.detail || "Failed to create bike");
+        throw new Error(data.detail || "Failed to create bike family");
       }
-      const created = await res.json();
-      router.push(`/bikes/${created.id}`);
+      const family = await res.json();
+
+      const defRes = await fetch(
+        `http://localhost:8000/api/bikes/definitions`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            family_id: family.id,
+            name: bike.model_name,
+            year_start: bike.model_year,
+            material: bike.frame_material,
+          }),
+        },
+      );
+      if (!defRes.ok) throw new Error("Failed to create frame definition");
+      const definition = await defRes.json();
+
+      for (const geo of bike.geometries || []) {
+        await fetch(`http://localhost:8000/api/bikes/geometry-specs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            definition_id: definition.id,
+            size_label: geo.size_label,
+            stack_mm: geo.stack,
+            reach_mm: geo.reach,
+            top_tube_effective_mm: geo.top_tube_effective_length,
+            seat_tube_length_mm: geo.seat_tube_length,
+            head_tube_length_mm: geo.head_tube_length,
+            head_tube_angle: geo.head_tube_angle,
+            seat_tube_angle: geo.seat_tube_angle,
+            chainstay_length_mm: geo.chainstay_length,
+            wheelbase_mm: geo.wheelbase,
+            bb_drop_mm: geo.bb_drop,
+          }),
+        });
+      }
+
+      router.push(`/bikes/${definition.id}`);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "An error occurred while saving",

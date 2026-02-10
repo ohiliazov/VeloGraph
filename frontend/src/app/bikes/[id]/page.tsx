@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import BikeFrameSVG from "../../../components/BikeFrameSVG";
-import { BikeGroup } from "../../../types";
+import { FrameDefinition } from "../../../types";
 import { useLanguage } from "../../../context/LanguageContext";
 import { useComparison } from "../../../context/ComparisonContext";
 import LanguageSwitcher from "../../../components/LanguageSwitcher";
@@ -16,7 +16,7 @@ export default function BikeDetailPage() {
   const { t } = useLanguage();
   const { addToCompare, removeFromCompare, isInComparison, comparisonList } =
     useComparison();
-  const [group, setGroup] = useState<BikeGroup | null>(null);
+  const [group, setGroup] = useState<FrameDefinition | null>(null);
   const [selectedProductId, setSelectedProductId] = useState<number | null>(
     null,
   );
@@ -27,15 +27,17 @@ export default function BikeDetailPage() {
   useEffect(() => {
     const fetchBike = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/bikes/${id}`);
+        const res = await fetch(
+          `http://localhost:8000/api/bikes/definitions/${id}`,
+        );
         if (!res.ok) throw new Error("Failed to fetch bike details");
-        const data: BikeGroup = await res.json();
+        const data: FrameDefinition = await res.json();
         setGroup(data);
-        if (data.products.length > 0) {
-          // If the ID in URL is one of the products, select it, otherwise first one
+        if (data.geometries && data.geometries.length > 0) {
+          // If the ID in URL is one of the geometries, select it, otherwise first one
           const currentId = Number(id);
-          const found = data.products.find((p) => p.id === currentId);
-          setSelectedProductId(found ? found.id : data.products[0].id);
+          const found = data.geometries.find((g) => g.id === currentId);
+          setSelectedProductId(found ? found.id : data.geometries[0].id);
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred");
@@ -52,7 +54,7 @@ export default function BikeDetailPage() {
     setDeleting(true);
     try {
       const res = await fetch(
-        `http://localhost:8000/api/bikes/${selectedProductId}`,
+        `http://localhost:8000/api/bikes/specs/${selectedProductId}`,
         {
           method: "DELETE",
         },
@@ -73,9 +75,14 @@ export default function BikeDetailPage() {
       <div className="text-center py-20">{t.categories.bike_not_found}</div>
     );
 
-  const product =
-    group.products.find((p) => p.id === selectedProductId) || group.products[0];
-  const geometry = product.geometry_spec;
+  const geometry =
+    group.geometries?.find((g) => g.id === selectedProductId) ||
+    group.geometries?.[0];
+
+  if (!geometry)
+    return (
+      <div className="text-center py-20">{t.categories.bike_not_found}</div>
+    );
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-black py-12">
@@ -109,86 +116,26 @@ export default function BikeDetailPage() {
 
         <header className="mb-8">
           <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">
-            {group.family.brand_name} {group.family.family_name}
+            {group.family?.brand_name} {group.family?.family_name}
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-400 mt-2">
-            {group.definition.name}{" "}
-            {group.definition.year_start && `(${group.definition.year_start})`}
-          </p>
-          <p className="text-lg text-gray-400 dark:text-gray-500 mt-1 font-mono uppercase tracking-tight">
-            SKU: {product.sku}
+            {group.name} {group.year_start && `(${group.year_start})`}
           </p>
         </header>
 
-        <div className="flex flex-wrap items-center gap-4 mb-8 bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
-          {product.colors.length > 0 && (
-            <div className="flex-1 min-w-[200px]">
-              <span className="block text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-2">
-                Available Colors
-              </span>
-              <div className="flex flex-wrap gap-3">
-                {product.colors.map((colorLabel, idx) => {
-                  const colorMap: Record<string, string> = {
-                    black: "#000000",
-                    czarny: "#000000",
-                    white: "#ffffff",
-                    bialy: "#ffffff",
-                    biały: "#ffffff",
-                    red: "#ef4444",
-                    czerwony: "#ef4444",
-                    blue: "#3b82f6",
-                    niebieski: "#3b82f6",
-                    green: "#22c55e",
-                    zielony: "#22c55e",
-                    gray: "#6b7280",
-                    grey: "#6b7280",
-                    szary: "#6b7280",
-                    silver: "#9ca3af",
-                    srebrny: "#9ca3af",
-                    orange: "#f97316",
-                    pomarańczowy: "#f97316",
-                    pomaranczowy: "#f97316",
-                    yellow: "#facc15",
-                    zolty: "#facc15",
-                    żółty: "#facc15",
-                    purple: "#a855f7",
-                    fioletowy: "#a855f7",
-                  };
-                  const key = (colorLabel || "")
-                    .toLowerCase()
-                    .split(/[\s-]+/)[0];
-                  const bg = colorMap[key] || "#ddd";
-                  return (
-                    <div
-                      key={idx}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300 shadow-sm hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
-                    >
-                      <span
-                        className="w-3.5 h-3.5 rounded-full border border-gray-300 dark:border-gray-600 shadow-inner"
-                        style={{ backgroundColor: bg }}
-                      />
-                      <span className="text-[11px] font-medium">
-                        {colorLabel}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
+        <div className="flex flex-wrap items-center gap-4 mb-8 bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm"></div>
 
         <div className="bg-white dark:bg-gray-900 p-8 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm mb-12 flex justify-center">
           <BikeFrameSVG geometry={geometry} height={200} />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
           <div className="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
             <h3 className="text-sm font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
               {t.ui.brand}
             </h3>
             <p className="text-lg font-medium text-gray-900 dark:text-gray-100">
-              {group.family.brand_name}
+              {group.family?.brand_name}
             </p>
           </div>
           <div className="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
@@ -196,15 +143,7 @@ export default function BikeDetailPage() {
               {t.ui.material}
             </h3>
             <p className="text-lg font-medium text-gray-900 dark:text-gray-100">
-              {group.definition.material || "N/A"}
-            </p>
-          </div>
-          <div className="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
-            <h3 className="text-sm font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
-              Build Kit
-            </h3>
-            <p className="text-lg font-medium text-gray-900 dark:text-gray-100">
-              {product.build_kit.name}
+              {group.material || "N/A"}
             </p>
           </div>
         </div>
@@ -222,21 +161,21 @@ export default function BikeDetailPage() {
                   <th className="py-4 px-6 border-r dark:border-gray-800 sticky left-0 bg-gray-50 dark:bg-gray-800 z-10 w-48">
                     {t.ui.geometry_details}
                   </th>
-                  {group.products.map((p) => (
+                  {group.geometries?.map((g) => (
                     <th
-                      key={p.id}
+                      key={g.id}
                       className={`py-4 px-6 text-center border-r dark:border-gray-800 min-w-[120px] cursor-pointer transition-colors ${
-                        selectedProductId === p.id
+                        selectedProductId === g.id
                           ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
                           : "hover:bg-gray-100 dark:hover:bg-gray-800"
                       }`}
-                      onClick={() => setSelectedProductId(p.id)}
+                      onClick={() => setSelectedProductId(g.id)}
                     >
                       <div className="flex flex-col items-center gap-2">
                         <span className="text-base font-bold text-gray-900 dark:text-white normal-case">
-                          {p.geometry_spec.size_label}
+                          {g.size_label}
                         </span>
-                        {selectedProductId === p.id && (
+                        {selectedProductId === g.id && (
                           <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded-full uppercase">
                             Selected
                           </span>
@@ -267,20 +206,16 @@ export default function BikeDetailPage() {
                     <td className="py-3 px-6 font-medium text-gray-500 dark:text-gray-400 bg-gray-50/30 dark:bg-gray-800/10 border-r dark:border-gray-800 sticky left-0 z-10">
                       {t.geometry[key]}
                     </td>
-                    {group.products.map((p) => (
+                    {group.geometries?.map((g) => (
                       <td
-                        key={p.id}
+                        key={g.id}
                         className={`py-3 px-6 text-center border-r dark:border-gray-800 font-mono ${
-                          selectedProductId === p.id
+                          selectedProductId === g.id
                             ? "bg-blue-50/30 dark:bg-blue-900/10 text-blue-700 dark:text-blue-400 font-bold"
                             : "text-gray-700 dark:text-gray-300"
                         }`}
                       >
-                        {
-                          p.geometry_spec[
-                            key as keyof typeof p.geometry_spec
-                          ] as string | number
-                        }
+                        {g[key as keyof typeof g] as string | number}
                         {String(key).includes("angle") ? "°" : " mm"}
                       </td>
                     ))}
@@ -290,13 +225,13 @@ export default function BikeDetailPage() {
                   <td className="py-4 px-6 font-medium text-gray-500 dark:text-gray-400 bg-gray-50/30 dark:bg-gray-800/10 border-r dark:border-gray-800 sticky left-0 z-10">
                     {t.ui.compare}
                   </td>
-                  {group.products.map((p) => {
-                    const inCompare = isInComparison(p.id);
+                  {group.geometries?.map((g) => {
+                    const inCompare = isInComparison(g.id);
                     return (
                       <td
-                        key={p.id}
+                        key={g.id}
                         className={`py-4 px-6 text-center border-r dark:border-gray-800 ${
-                          selectedProductId === p.id
+                          selectedProductId === g.id
                             ? "bg-blue-50/30 dark:bg-blue-900/10"
                             : ""
                         }`}
@@ -304,8 +239,8 @@ export default function BikeDetailPage() {
                         <button
                           onClick={() =>
                             inCompare
-                              ? removeFromCompare(p.id)
-                              : addToCompare(p)
+                              ? removeFromCompare(g.id)
+                              : addToCompare(g)
                           }
                           className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors w-full ${
                             inCompare

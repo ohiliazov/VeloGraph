@@ -21,7 +21,7 @@ RUN python -m venv "$VIRTUAL_ENV" \
  && pip install --no-cache-dir -r requirements.txt
 
 # -------- Development stage --------
-FROM python:3.12-slim AS dev
+FROM python:3.14-slim AS dev
 
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
@@ -50,7 +50,7 @@ EXPOSE 8000
 CMD ["uvicorn", "backend.__main__:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
 # -------- Production runtime stage: slim image with runtime libs only --------
-FROM python:3.12-slim AS prod
+FROM python:3.14-slim AS prod
 
 # Install only runtime libraries (no compilers)
 RUN apt-get update && apt-get install -y --no-install-recommends \
