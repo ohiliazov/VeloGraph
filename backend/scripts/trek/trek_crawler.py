@@ -5,7 +5,6 @@ from loguru import logger
 from backend.scripts.base import BaseBikeCrawler
 from backend.scripts.constants import artifacts_dir
 
-START_URL = "https://www.trekbikes.com/pl/pl_PL/rowery/c/B100/?pageSize=72&q=%3Arelevance&sort=relevance#"
 BASE_URL = "https://www.trekbikes.com"
 
 

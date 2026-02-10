@@ -1,5 +1,4 @@
 import json
-import logging
 from pathlib import Path
 from typing import ClassVar
 
@@ -18,15 +17,15 @@ def route_resource_type_handler(r: Route) -> None:
 class BaseBikeCrawler:
     brand_name: ClassVar[str]
 
-    def __init__(self, start_url: str, collected_urls_path: Path):
+    def __init__(self, start_url: str, output_path: Path):
         self.start_url = start_url
-        self.collected_urls_path = collected_urls_path
+        self.output_path = output_path
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         retry=retry_if_exception_type(Error),
-        before_sleep=before_sleep_log(logger, logging.WARNING),
+        before_sleep=before_sleep_log(logger, "WARNING"),
         reraise=True,
     )
     def goto_page(self, page: Page, url: str):
@@ -40,10 +39,10 @@ class BaseBikeCrawler:
         raise NotImplementedError
 
     def run(self) -> list[str]:
-        self.collected_urls_path.parent.mkdir(parents=True, exist_ok=True)
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        if self.collected_urls_path.exists():
-            with open(self.collected_urls_path, encoding="utf-8") as f:
+        if self.output_path.exists():
+            with open(self.output_path, encoding="utf-8") as f:
                 urls = set(json.load(f))
         else:
             urls: set[str] = set()
@@ -75,9 +74,9 @@ class BaseBikeCrawler:
 
         sorted_urls = sorted(urls)
 
-        with open(self.collected_urls_path, "w", encoding="utf-8") as f:
+        with open(self.output_path, "w", encoding="utf-8") as f:
             json.dump(sorted_urls, f, indent=2)
 
-        logger.success("💾 Saved {} bike URLs to {}", len(sorted_urls), self.collected_urls_path)
+        logger.success("💾 Saved {} bike URLs to {}", len(sorted_urls), self.output_path)
 
         return sorted_urls

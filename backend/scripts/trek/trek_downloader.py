@@ -1,79 +1,80 @@
-from pathlib import Path
-from typing import Any
-from urllib.parse import urlparse
+import json
+from urllib.parse import unquote, urlparse
 
 from loguru import logger
+from playwright.sync_api import sync_playwright
 
-from backend.scripts.base import BaseBikeDataDownloader
+from backend.scripts.base.base_downloader import BaseDownloader
 from backend.scripts.constants import artifacts_dir
 
 API_BASE = "https://api.trekbikes.com/occ/v2/pl/products/{pid}/sizing?lang=pl_PL&curr=PLN"
+POLISH_TO_ASCII = str.maketrans(
+    {
+        "ą": "a",
+        "ć": "c",
+        "ę": "e",
+        "ł": "l",
+        "ń": "n",
+        "ó": "o",
+        "ś": "s",
+        "ź": "z",
+        "ż": "z",
+        "Ą": "A",
+        "Ć": "C",
+        "Ę": "E",
+        "Ł": "L",
+        "Ń": "N",
+        "Ó": "O",
+        "Ś": "S",
+        "Ź": "Z",
+        "Ż": "Z",
+    }
+)
 
 
-class TrekBikeDownloader(BaseBikeDataDownloader):
-    def __init__(self, html_path: Path | None = None):
-        brand_name = "trek"
-        html_path = html_path or (artifacts_dir / brand_name / "raw_htmls")
-        super().__init__(brand_name=brand_name, html_dir=html_path)
+def polish_to_ascii(text: str) -> str:
+    table = str.maketrans(POLISH_TO_ASCII)
+    return unquote(text).translate(table)
 
-    def get_slug_from_url(self, url: str) -> str:
-        parsed = urlparse(url)
+
+class TrekDownloader(BaseDownloader):
+    brand_name = "trek"
+
+    def get_slug_from_url(self) -> str:
+        parsed = urlparse(self.input_url)
         path = parsed.path.rstrip("/")
-        return path.split("/")[-3] + "__" + path.split("/")[-1]
+        return polish_to_ascii(path.split("/")[-3]) + "__" + path.split("/")[-1]
 
-    def process_url(
-        self,
-        page: Any,
-        url: str,
-        idx: int,
-        total: int,
-        existing: set[str],
-        html_dir: Path | None = None,
-        max_retries: int = 3,
-    ):
-        slug = self.get_slug_from_url(url)
-        html_name = f"{slug}.html"
-        json_name = f"{slug}_sizing.json"
+    def _download_sizing_json(self):
+        slug = self.get_slug_from_url()
+        json_path = self.output_dir / f"{self.get_slug_from_url()}_sizing.json"
 
-        if html_name in existing and json_name in existing:
-            logger.debug("⏭️ [{:d}/{:d}] Skipping existing HTML+JSON for {}", idx, total, url)
+        if json_path.exists() and not self.overwrite:
+            logger.info("⏭️ Skipping existing file {}", json_path)
             return
+        pid = slug.split("__")[1]
 
-        # First: fetch and save HTML via base helper
-        try:
-            self._download_single_page(
-                page,
-                url,
-                idx,
-                total,
-                existing,
-                html_dir=html_dir or self.html_dir,
-                max_retries=max_retries,
-                filename=html_name,
-                is_json=False,
-            )
-        except Exception as e:
-            logger.error("❌ Failed HTML fetch for {} after {} attempts: {}", url, max_retries, e)
-            return
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            target_url = API_BASE.format(pid=pid)
+            logger.info(f"Downloading sizing JSON {target_url}")
+            resp = page.request.get(target_url, timeout=15000)
+            if not resp.ok:
+                raise Exception(f"Bad status {resp.status} for {target_url}")
+            self._save_file(json.dumps(resp.json(), ensure_ascii=False), json_path)
 
-        # Second: sizing JSON using product id
-        pid = slug.split("__")[1] if "__" in slug else ""
-        if not pid:
-            logger.warning("⚠️ Could not determine product id for {}", url)
-            return
+    def run(self):
+        super().run()
+        self._download_sizing_json()
 
-        api_url = API_BASE.format(pid=pid)
-        try:
-            self._download_single_page(
-                page,
-                api_url,
-                idx,
-                total,
-                existing,
-                html_dir=html_dir or self.html_dir,
-                max_retries=max_retries,
-                filename=json_name,
-                is_json=True,
-            )
-        except Exception:
-            logger.error("❌ Failed to fetch sizing JSON for pid {} after {} attempts", pid, max_retries)
+
+if __name__ == "__main__":
+    with open(artifacts_dir / "trek" / "bike_urls.json") as f:
+        bike_urls = json.load(f)
+
+    output_dir = artifacts_dir / "trek" / "raw_htmls"
+
+    for url in bike_urls:
+        downloader = TrekDownloader(url, output_dir, overwrite=False)
+        downloader.run()

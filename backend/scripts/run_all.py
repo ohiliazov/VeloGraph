@@ -1,3 +1,5 @@
+import json
+
 from elasticsearch import Elasticsearch
 from loguru import logger
 from sqlalchemy import delete
@@ -8,11 +10,11 @@ from backend.core.models import BikeFamilyORM
 from backend.scripts import populate_es as es_pop
 from backend.scripts.constants import artifacts_dir
 from backend.scripts.kross.kross_crawler import KrossBikeCrawler
-from backend.scripts.kross.kross_downloader import KrossBikeDownloader
+from backend.scripts.kross.kross_downloader import KrossDownloader
 from backend.scripts.kross.kross_extractor import KrossBikeExtractor
 from backend.scripts.kross.kross_populator import KrossBikePopulator
 from backend.scripts.trek.trek_crawler import TrekBikeCrawler
-from backend.scripts.trek.trek_downloader import TrekBikeDownloader
+from backend.scripts.trek.trek_downloader import TrekDownloader
 from backend.scripts.trek.trek_extractor import TrekBikeExtractor
 from backend.scripts.trek.trek_populator import TrekBikePopulator
 
@@ -30,20 +32,67 @@ def crawl_all():
 
     # Trek
     trek_html = artifacts_dir / "trek" / "raw_htmls"
-    trek_urls = artifacts_dir / "trek" / "bike_urls.json"
+    trek_urls_path = artifacts_dir / "trek" / "bike_urls.json"
     logger.info("🌐 Trek: collecting URLs (force={})", FORCE_CRAWLER)
-    urls = TrekBikeCrawler(urls_path=trek_urls).run(force=FORCE_CRAWLER)
+    TREK_BASE_URL = "https://www.trekbikes.com/pl/pl_PL/rowery"
+    TREK_START_URLS = {
+        f"{TREK_BASE_URL}/rowery-szosowe/rowery-szosowe-wyczynowe/c/B260/": "road",
+        f"{TREK_BASE_URL}/rowery-szosowe/rowery-gravel/rowery-gravel-z-kierownicami-szosowymi/c/B562/": "gravel",
+        f"{TREK_BASE_URL}/rowery-szosowe/rowery-gravel/rowery-all-road/c/B564/": "gravel",
+        f"{TREK_BASE_URL}/rowery-szosowe/rowery-gravel/elektryczne-rowery-gravel/c/B561/": "gravel",
+        f"{TREK_BASE_URL}/rowery-szosowe/rowery-prze%C5%82ajowe/c/B240/": "gravel",
+        f"{TREK_BASE_URL}/rowery-szosowe/rowery-triathlonowe/c/B230/": "triathlon",
+        f"{TREK_BASE_URL}/rowery-g%C3%B3rskie/c/B300/": "mtb",
+        f"{TREK_BASE_URL}/rowery-hybrydowe/c/B528/": "city",
+        f"{TREK_BASE_URL}/rowery-szosowe/damskie-rowery-szosowe/c/B522/": "women",
+        f"{TREK_BASE_URL}/rowery-hybrydowe/damskie-rowery-miejskie/c/B521/": "women",
+        f"{TREK_BASE_URL}/rowery-hybrydowe/damskie-rowery-crossowe/c/B526/": "women",
+        f"{TREK_BASE_URL}/rowery-dla-dzieci/c/B506/": "kids",
+        f"{TREK_BASE_URL}/rowery-elektryczne/c/B507/": "electric",
+        f"{TREK_BASE_URL}/elektryczne-rowery-hybrydowe/c/B550/": "electric",
+    }
+
+    all_trek_urls = set()
+    if not trek_urls_path.exists() or FORCE_CRAWLER:
+        for start_url in TREK_START_URLS:
+            urls = TrekBikeCrawler(start_url=start_url, output_path=trek_urls_path).run()
+            all_trek_urls.update(urls)
+    else:
+        with open(trek_urls_path, encoding="utf-8") as f:
+            all_trek_urls = json.load(f)
 
     logger.info("🌐 Trek: downloading HTMLs (force={})", FORCE_DOWNLOADER)
-    TrekBikeDownloader(html_path=trek_html).run(urls=urls, force=FORCE_DOWNLOADER)
+    for url in sorted(all_trek_urls):
+        TrekDownloader(input_url=url, output_dir=trek_html, overwrite=FORCE_DOWNLOADER).run()
 
     # Kross
     kross_html = artifacts_dir / "kross" / "raw_htmls"
-    kross_urls = artifacts_dir / "kross" / "bike_urls.json"
+    kross_urls_path = artifacts_dir / "kross" / "bike_urls.json"
     logger.info("🌐 Kross: collecting URLs (force={})", FORCE_CRAWLER)
-    urls = KrossBikeCrawler(urls_path=kross_urls).run(force=FORCE_CRAWLER)
+
+    # Since Kross doesn't have a single START_URL but several, we use the ones from its __main__
+    KROSS_START_URLS = [
+        "https://kross.pl/rowery/rowery-szosowe",
+        "https://kross.pl/rowery/rowery-gravel",
+        "https://kross.pl/rowery/rowery-gorskie",
+        "https://kross.pl/rowery/rowery-turystyczne",
+        "https://kross.pl/rowery/rowery-miejskie",
+        "https://kross.pl/rowery/rowery-damskie",
+        "https://kross.pl/rowery/rowery-dla-dzieci",
+    ]
+
+    all_kross_urls = set()
+    if not kross_urls_path.exists() or FORCE_CRAWLER:
+        for start_url in KROSS_START_URLS:
+            urls = KrossBikeCrawler(start_url=start_url, output_path=kross_urls_path).run()
+            all_kross_urls.update(urls)
+    else:
+        with open(kross_urls_path, encoding="utf-8") as f:
+            all_kross_urls = json.load(f)
+
     logger.info("🌐 Kross: downloading HTMLs (force={})", FORCE_DOWNLOADER)
-    KrossBikeDownloader(html_path=kross_html).run(urls=urls, force=FORCE_DOWNLOADER)
+    for url in sorted(all_kross_urls):
+        KrossDownloader(input_url=url, output_dir=kross_html, overwrite=FORCE_DOWNLOADER).run()
 
 
 def extract_all():
