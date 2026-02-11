@@ -1,68 +1,72 @@
-from urllib.parse import urljoin, urlparse
+import json
 
+import httpx
 from loguru import logger
 
-from backend.scripts.base import BaseBikeCrawler
 from backend.scripts.constants import artifacts_dir
 
-BASE_URL = "https://www.trekbikes.com"
 
+class TrekAPICrawler:
+    def __init__(self):
+        self.client = httpx.Client(base_url="https://api.trekbikes.com/occ/v2/pl")
+        self.trek_artifacts = artifacts_dir / "trek"
+        self.output_path = self.trek_artifacts / "all_product_codes.json"
+        self.output_json_dir = self.trek_artifacts / "raw_jsons"
 
-class TrekBikeCrawler(BaseBikeCrawler):
-    brand_name = "trek"
+        self.output_json_dir.mkdir(parents=True, exist_ok=True)
 
-    def normalize_url(self, href: str) -> str:
-        href = href.strip()
-        if href.startswith(("http://", "https://")):
-            return href
-        return urljoin(BASE_URL, href)
+    def collect_product_codes(self, overwrite: bool = False) -> list[int]:
+        logger.info(f"Collecting product codes ({overwrite=})...")
+        if self.output_path.exists() and not overwrite:
+            return json.loads(self.output_path.read_text())
 
-    def get_slug_from_url(self, url: str) -> str:
-        parsed = urlparse(url)
-        path = parsed.path.rstrip("/")
-        return path.split("/")[-3] + "__" + path.split("/")[-1]
+        all_product_codes = set()
 
-    def collect_page_urls(self, page) -> set[str]:
-        urls: set[str] = set()
-        anchors = page.query_selector_all("ul li article div h3 a")
-        for a in anchors:
-            href = a.get_attribute("href")
-            if not href:
-                continue
-            url = self.normalize_url(href)
-            urls.add(url)
-        return urls
+        current_page = 0
+        while True:
+            logger.info(f"Collecting product codes from page {current_page}...")
+            print("Current page:", current_page)
+            resp = self.client.get(
+                "/products/search",
+                params={"fields": "BASIC", "pageSize": 100, "currentPage": current_page},
+            )
 
-    def get_next_page_url(self, page) -> str | None:
-        next_a = page.query_selector("a#search-page-next")
-        if next_a:
-            next_href = next_a.get_attribute("href")
-            if next_href:
-                next_url = self.normalize_url(next_href)
-                logger.debug("➡️ Navigating to next catalog page: {}", next_url)
-                return next_url
-        return None
+            if products := resp.json()["products"]:
+                for product in products:
+                    if product["productType"] == "BikeProduct":
+                        all_product_codes.add(int(product["code"]))
+            else:
+                logger.info("No more pages found.")
+                break
+
+            logger.info(f"Total bikes found: {len(all_product_codes)}")
+            current_page += 1
+
+        all_product_codes = sorted(all_product_codes)
+
+        self.output_path.write_text(json.dumps(all_product_codes, indent=2))
+
+        return all_product_codes
+
+    def collect_product_data(self, product_code: int, overwrite: bool = False) -> dict:
+        json_path = self.output_json_dir / f"{product_code}.json"
+
+        if json_path.exists() and not overwrite:
+            logger.info(f"Data already exists for product code {product_code}. Skipping...")
+            return json.loads(json_path.read_text())
+
+        logger.info(f"Collecting data for product code {product_code}...")
+        details = self.client.get(f"/products/{product_code}/full").json()
+        sizing = self.client.get(f"/products/{product_code}/sizing").json()
+
+        data = {"details": details, "sizing": sizing}
+        json_path.write_text(json.dumps(data, indent=2))
+
+        return data
 
 
 if __name__ == "__main__":
-    BASE_URL = "https://www.trekbikes.com/pl/pl_PL/rowery"
-    BIKE_START_URLS = {
-        f"{BASE_URL}/rowery-szosowe/rowery-szosowe-wyczynowe/c/B260/": "road",
-        f"{BASE_URL}/rowery-szosowe/rowery-gravel/rowery-gravel-z-kierownicami-szosowymi/c/B562/": "gravel",
-        f"{BASE_URL}/rowery-szosowe/rowery-gravel/rowery-all-road/c/B564/": "gravel",
-        f"{BASE_URL}/rowery-szosowe/rowery-gravel/elektryczne-rowery-gravel/c/B561/": "gravel",
-        f"{BASE_URL}/rowery-szosowe/rowery-prze%C5%82ajowe/c/B240/": "gravel",
-        f"{BASE_URL}/rowery-szosowe/rowery-triathlonowe/c/B230/": "triathlon",
-        f"{BASE_URL}/rowery-g%C3%B3rskie/c/B300/": "mtb",
-        f"{BASE_URL}/rowery-hybrydowe/c/B528/": "city",
-        f"{BASE_URL}/rowery-szosowe/damskie-rowery-szosowe/c/B522/": "women",
-        f"{BASE_URL}/rowery-hybrydowe/damskie-rowery-miejskie/c/B521/": "women",
-        f"{BASE_URL}/rowery-hybrydowe/damskie-rowery-crossowe/c/B526/": "women",
-        f"{BASE_URL}/rowery-dla-dzieci/c/B506/": "kids",
-        f"{BASE_URL}/rowery-elektryczne/c/B507/": "electric",
-        f"{BASE_URL}/elektryczne-rowery-hybrydowe/c/B550/": "electric",
-    }
+    crawler = TrekAPICrawler()
 
-    for start_url, _category in BIKE_START_URLS.items():
-        crawler = TrekBikeCrawler(start_url, artifacts_dir / "trek" / "bike_urls.json")
-        crawler.run()
+    for product_code in crawler.collect_product_codes():
+        crawler.collect_product_data(product_code)

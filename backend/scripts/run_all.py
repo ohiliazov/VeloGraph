@@ -63,7 +63,7 @@ def crawl_all():
 
     logger.info("🌐 Trek: downloading HTMLs (force={})", FORCE_DOWNLOADER)
     for url in sorted(all_trek_urls):
-        TrekDownloader(input_url=url, output_dir=trek_html, overwrite=FORCE_DOWNLOADER).run()
+        TrekDownloader(input_bike_url=url, output_dir=trek_html, overwrite=FORCE_DOWNLOADER).run()
 
     # Kross
     kross_html = artifacts_dir / "kross" / "raw_htmls"
@@ -92,7 +92,7 @@ def crawl_all():
 
     logger.info("🌐 Kross: downloading HTMLs (force={})", FORCE_DOWNLOADER)
     for url in sorted(all_kross_urls):
-        KrossDownloader(input_url=url, output_dir=kross_html, overwrite=FORCE_DOWNLOADER).run()
+        KrossDownloader(input_bike_url=url, output_dir=kross_html, overwrite=FORCE_DOWNLOADER).run()
 
 
 def extract_all():
