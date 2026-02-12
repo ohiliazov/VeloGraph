@@ -7,11 +7,9 @@ from sqlalchemy.orm import Session, selectinload
 
 from backend.api.schemas import (
     BikeCategory,
+    BikeDefinitionCreateSchema,
+    BikeDefinitionExtendedSchema,
     BikeDefinitionSchema,
-    BikeFamilyCreateSchema,
-    FrameDefinitionCreateSchema,
-    FrameDefinitionExtendedSchema,
-    FrameDefinitionSchema,
     GeometrySpecCreateSchema,
     GeometrySpecExtendedSchema,
     GeometrySpecSchema,
@@ -22,30 +20,21 @@ from backend.api.schemas import (
 from backend.core.constants import BIKE_PRODUCT_INDEX, FRAMESET_GEOMETRY_INDEX
 from backend.core.db import get_db
 from backend.core.elasticsearch import get_es_client
-from backend.core.models import BikeDefinitionORM, FrameDefinitionORM, GeometrySpecORM
+from backend.core.models import BikeDefinitionORM, GeometrySpecORM
 from backend.core.utils import get_material_group
 
 router = APIRouter()
 
 
-@router.get("/families", response_model=list[BikeDefinitionSchema])
-def list_families(db: Annotated[Session, Depends(get_db)], limit: int = 100):
+@router.get("/definitions", response_model=list[BikeDefinitionSchema])
+def list_definitions(db: Annotated[Session, Depends(get_db)], limit: int = 100):
     stmt = select(BikeDefinitionORM).limit(limit)
     return db.scalars(stmt).all()
 
 
-@router.post("/families", response_model=BikeDefinitionSchema)
-def create_family(data: BikeFamilyCreateSchema, db: Annotated[Session, Depends(get_db)]):
-    new_family = BikeDefinitionORM(**data.model_dump())
-    db.add(new_family)
-    db.commit()
-    db.refresh(new_family)
-    return new_family
-
-
-@router.post("/definitions", response_model=FrameDefinitionSchema)
-def create_definition(data: FrameDefinitionCreateSchema, db: Annotated[Session, Depends(get_db)]):
-    new_def = FrameDefinitionORM(**data.model_dump())
+@router.post("/definitions", response_model=BikeDefinitionSchema)
+def create_definition(data: BikeDefinitionCreateSchema, db: Annotated[Session, Depends(get_db)]):
+    new_def = BikeDefinitionORM(**data.model_dump())
     db.add(new_def)
     db.commit()
     db.refresh(new_def)
@@ -74,7 +63,7 @@ async def search_geometry(
 ):
     filters = []
     if category:
-        filters.append({"term": {"family.category": category.value}})
+        filters.append({"term": {"definition.category": category.value}})
     if material:
         filters.append({"term": {"definition.material_group": material.value}})
 
@@ -110,7 +99,7 @@ async def search_geometry(
         select(GeometrySpecORM)
         .where(GeometrySpecORM.id.in_(spec_ids))
         .options(
-            selectinload(GeometrySpecORM.definition).selectinload(FrameDefinitionORM.family),
+            selectinload(GeometrySpecORM.definition),
         )
     )
     specs = db.scalars(stmt).all()
@@ -132,7 +121,7 @@ async def search_keyword(
 ):
     filters = []
     if category:
-        filters.append({"term": {"family.category": category.value}})
+        filters.append({"term": {"definition.category": category.value}})
     if material:
         filters.append({"term": {"definition.material_group": material.value}})
 
@@ -143,8 +132,8 @@ async def search_keyword(
                 "multi_match": {
                     "query": q,
                     "fields": [
-                        "family.family_name^3",
-                        "definition.name^2",
+                        "definition.brand_name^3",
+                        "definition.model_name^2",
                     ],
                     "fuzziness": "AUTO",
                 }
@@ -155,7 +144,7 @@ async def search_keyword(
     if q:
         sort.append("_score")
     else:
-        sort.append({"family.family_name.keyword": "asc"})
+        sort.append({"definition.brand_name.keyword": "asc"})
 
     query = {"bool": {"must": must, "filter": filters}}
     from_ = (page - 1) * size
@@ -169,11 +158,10 @@ async def search_keyword(
         return {"total": total, "items": []}
 
     stmt = (
-        select(FrameDefinitionORM)
-        .where(FrameDefinitionORM.id.in_(def_ids))
+        select(BikeDefinitionORM)
+        .where(BikeDefinitionORM.id.in_(def_ids))
         .options(
-            selectinload(FrameDefinitionORM.family),
-            selectinload(FrameDefinitionORM.geometries),
+            selectinload(BikeDefinitionORM.geometries),
         )
     )
     definitions = db.scalars(stmt).all()
@@ -183,19 +171,18 @@ async def search_keyword(
     return {"total": total, "items": sorted_defs}
 
 
-@router.get("/definitions/{def_id}", response_model=FrameDefinitionExtendedSchema)
-def get_frame_definition(def_id: int, db: Annotated[Session, Depends(get_db)]):
+@router.get("/definitions/{def_id}", response_model=BikeDefinitionExtendedSchema)
+def get_bike_definition(def_id: int, db: Annotated[Session, Depends(get_db)]):
     stmt = (
-        select(FrameDefinitionORM)
-        .where(FrameDefinitionORM.id == def_id)
+        select(BikeDefinitionORM)
+        .where(BikeDefinitionORM.id == def_id)
         .options(
-            selectinload(FrameDefinitionORM.family),
-            selectinload(FrameDefinitionORM.geometries),
+            selectinload(BikeDefinitionORM.geometries),
         )
     )
     definition = db.scalar(stmt)
     if not definition:
-        raise HTTPException(status_code=404, detail="Frame definition not found")
+        raise HTTPException(status_code=404, detail="Bike definition not found")
 
     return definition
 
@@ -206,7 +193,7 @@ def get_geometry_spec(spec_id: int, db: Annotated[Session, Depends(get_db)]):
         select(GeometrySpecORM)
         .where(GeometrySpecORM.id == spec_id)
         .options(
-            selectinload(GeometrySpecORM.definition).selectinload(FrameDefinitionORM.family),
+            selectinload(GeometrySpecORM.definition),
         )
     )
     spec = db.scalar(stmt)
@@ -235,11 +222,10 @@ async def delete_geometry_spec(
 
     # Re-sync parent definition to BIKE_PRODUCT_INDEX
     stmt = (
-        select(FrameDefinitionORM)
-        .where(FrameDefinitionORM.id == def_id)
+        select(BikeDefinitionORM)
+        .where(BikeDefinitionORM.id == def_id)
         .options(
-            selectinload(FrameDefinitionORM.family),
-            selectinload(FrameDefinitionORM.geometries),
+            selectinload(BikeDefinitionORM.geometries),
         )
     )
     definition = db.scalar(stmt)
@@ -251,17 +237,14 @@ async def delete_geometry_spec(
     return {"detail": "Geometry spec deleted"}
 
 
-async def sync_definition_to_es(definition: FrameDefinitionORM, es: AsyncElasticsearch):
+async def sync_definition_to_es(definition: BikeDefinitionORM, es: AsyncElasticsearch):
     # This will be used to populate BIKE_PRODUCT_INDEX (grouped view)
     doc = {
         "id": definition.id,
-        "family": {
-            "brand_name": definition.family.brand_name,
-            "family_name": definition.family.family_name,
-            "category": definition.family.category,
-        },
         "definition": {
-            "name": definition.model_name,
+            "brand_name": definition.brand_name,
+            "model_name": definition.model_name,
+            "category": definition.category,
             "material": definition.material,
             "material_group": get_material_group(definition.material),
         },

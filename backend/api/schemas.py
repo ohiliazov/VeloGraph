@@ -36,9 +36,7 @@ class BikeDefinitionSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class GeometrySpecSchema(BaseModel):
-    id: int
-    definition_id: int
+class GeometrySpecBaseSchema(BaseModel):
     size_label: str
     stack_mm: int
     reach_mm: int
@@ -57,6 +55,13 @@ class GeometrySpecSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class GeometrySpecSchema(GeometrySpecBaseSchema):
+    id: int
+    definition_id: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class BikeDefinitionExtendedSchema(BikeDefinitionSchema):
     geometries: list[GeometrySpecSchema] = []
 
@@ -65,24 +70,17 @@ class GeometrySpecExtendedSchema(GeometrySpecSchema):
     definition: BikeDefinitionSchema
 
 
-class BikeFamilyCreateSchema(BaseModel):
+class BikeDefinitionCreateSchema(BaseModel):
     brand_name: str
-    family_name: str
+    model_name: str
     category: str
-
-
-class FrameDefinitionCreateSchema(BaseModel):
-    family_id: int
-    name: str
     year_start: int | None = None
     year_end: int | None = None
     material: str | None = None
 
 
-class GeometrySpecSchema(BaseModel):
-    id: int | None = None
-    definition_id: int | None = None
-
+class GeometrySpecCreateSchema(BaseModel):
+    definition_id: int
     size_label: str
     stack_mm: int
     reach_mm: int
@@ -99,15 +97,11 @@ class GeometrySpecSchema(BaseModel):
     standover_height_mm: int | None = None
 
 
-class GeometrySpecCreateSchema(GeometrySpecSchema):
-    definition_id: int
-
-
 class SearchResult(BaseModel):
     total: int
-    items: list[GeometrySpecExtendedSchema]
+    items: list[GeometrySpecExtendedSchema] = []
 
 
 class GroupedSearchResult(BaseModel):
     total: int
-    items: list[BikeDefinitionExtendedSchema]
+    items: list[BikeDefinitionExtendedSchema] = []

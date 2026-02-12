@@ -6,7 +6,7 @@ from pathlib import Path
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from backend.api.schemas import BikeDefinitionSchema, GeometrySpecSchema
+from backend.api.schemas import BikeDefinitionSchema, GeometrySpecBaseSchema
 from backend.scripts.constants import artifacts_dir
 from backend.scripts.schemas import ExtractedData
 
@@ -140,12 +140,13 @@ class TrekBikeExtractor:
                     m = FLOAT_REGEX.match(val)
                     assert m is not None, f"Invalid numeric value '{val}' for '{model_key}'"
                     val = Decimal(m.group(0))
-                    if val not in ANGLE_FIELDS:
+
+                    if model_key not in ANGLE_FIELDS:
                         val = Decimal(m.group(0)) * 10
 
                 geo_spec[model_key] = val
 
-            geometries.append(GeometrySpecSchema(**geo_spec))
+            geometries.append(GeometrySpecBaseSchema(**geo_spec))
 
         extracted_data = ExtractedData(
             bike_definition=bike_definition,

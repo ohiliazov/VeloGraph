@@ -88,8 +88,8 @@ export default function BikeSearch() {
         const initialSelection: Record<string, number> = {};
         data.items?.forEach((item) => {
           if (!item) return;
-          const groupKey = `${item.family?.family_name || "Unknown"}-${
-            item.name || "Unknown"
+          const groupKey = `${item.brand_name || "Unknown"}-${
+            item.model_name || "Unknown"
           }`;
           if (item.geometries && item.geometries.length > 0) {
             initialSelection[groupKey] = item.geometries[0].id;
@@ -474,8 +474,8 @@ export default function BikeSearch() {
                   if (!item) return null;
                   const isGroup = "geometries" in item;
                   const groupKey = isGroup
-                    ? `${item.family?.family_name || "Unknown"}-${
-                        item.name || "Unknown"
+                    ? `${item.brand_name || "Unknown"}-${
+                        item.model_name || "Unknown"
                       }`
                     : "";
                   const selectedId = isGroup
@@ -542,12 +542,11 @@ export default function BikeSearch() {
                               href={`/bikes/${definition?.id}?size=${geometry.id}`}
                               className="text-sm font-bold text-gray-900 dark:text-gray-100 hover:text-blue-600 dark:hover:text-blue-400 transition-colors block truncate"
                             >
-                              {definition?.family?.brand_name}{" "}
-                              {definition?.family?.family_name}
+                              {definition?.brand_name} {definition?.model_name}
                             </Link>
                             <div className="flex flex-wrap items-center gap-2 mt-1.5">
                               <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">
-                                {definition?.name}
+                                {definition?.category}
                               </span>
                               <span className="text-[10px] font-extrabold text-blue-500 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/30 px-2 py-0.5 rounded-md uppercase tracking-wider border border-blue-100/50 dark:border-blue-900/50">
                                 {definition?.material || "N/A"}

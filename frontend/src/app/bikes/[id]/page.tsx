@@ -121,10 +121,10 @@ function BikeDetailContent() {
 
         <header className="mb-8">
           <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">
-            {group.family?.brand_name} {group.family?.family_name}
+            {group.brand_name} {group.model_name}
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-400 mt-2">
-            {group.name} {group.year_start && `(${group.year_start})`}
+            {group.category} {group.year_start && `(${group.year_start})`}
           </p>
         </header>
 
@@ -140,7 +140,7 @@ function BikeDetailContent() {
               {t.ui.brand}
             </h3>
             <p className="text-lg font-medium text-gray-900 dark:text-gray-100">
-              {group.family?.brand_name}
+              {group.brand_name}
             </p>
           </div>
           <div className="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">

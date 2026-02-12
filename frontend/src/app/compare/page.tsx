@@ -113,8 +113,8 @@ export default function ComparisonPage() {
                         <div className="flex justify-between items-start">
                           <div>
                             <p className="text-gray-900 dark:text-white font-bold normal-case text-base">
-                              {item.geometry.definition?.family?.brand_name}{" "}
-                              {item.geometry.definition?.family?.family_name}
+                              {item.geometry.definition?.brand_name}{" "}
+                              {item.geometry.definition?.model_name}
                             </p>
                             <p className="text-gray-500 dark:text-gray-400 font-medium normal-case">
                               {t.geometry.size_label}:{" "}

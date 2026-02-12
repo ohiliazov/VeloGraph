@@ -41,12 +41,12 @@ export interface GeometrySpec {
 
 export interface FrameDefinition {
   id: number;
-  family_id: number;
-  name: string;
+  brand_name: string;
+  model_name: string;
+  category: string;
   year_start: number | null;
   year_end: number | null;
   material: string | null;
-  family?: BikeFamily;
   geometries?: GeometrySpec[];
 }
 
@@ -76,9 +76,7 @@ export interface BikeProduct {
 }
 
 export interface BikeGroup {
-  family: BikeFamily;
   definition: FrameDefinition;
-  build_kit: BuildKit;
   products: BikeProduct[];
 }
 
