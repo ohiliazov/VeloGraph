@@ -6,60 +6,29 @@ from sqlalchemy.orm import selectinload
 from backend.config import es_settings
 from backend.core.constants import BIKE_PRODUCT_INDEX, FRAMESET_GEOMETRY_INDEX
 from backend.core.db import SessionLocal
-from backend.core.models import FrameDefinitionORM, GeometrySpecORM
+from backend.core.models import BikeDefinitionORM, GeometrySpecORM
 from backend.core.utils import get_material_group
 
 
-def serialize_spec(spec: GeometrySpecORM) -> dict:
-    definition = spec.definition
-    family = definition.family
-    return {
-        "_index": FRAMESET_GEOMETRY_INDEX,
-        "_id": spec.id,
-        "_source": {
-            "id": spec.id,
-            "geometry_spec": {
-                "size_label": spec.size_label,
-                "stack_mm": spec.stack_mm,
-                "reach_mm": spec.reach_mm,
-            },
-            "definition": {
-                "name": definition.name,
-                "material": definition.material,
-                "material_group": get_material_group(definition.material),
-            },
-            "family": {
-                "brand_name": family.brand_name,
-                "family_name": family.family_name,
-                "category": family.category,
-            },
-        },
-    }
-
-
-def serialize_definition(definition: FrameDefinitionORM) -> dict:
-    family = definition.family
-    return {
-        "_index": BIKE_PRODUCT_INDEX,
-        "_id": definition.id,
-        "_source": {
-            "id": definition.id,
-            "family": {
-                "brand_name": family.brand_name,
-                "family_name": family.family_name,
-                "category": family.category,
-            },
-            "definition": {
-                "name": definition.name,
-                "material": definition.material,
-                "material_group": get_material_group(definition.material),
-            },
-            "sizes": [s.size_label for s in definition.geometries],
-        },
-    }
+def _recreate_index(es, name, settings, mapping):
+    if es.indices.exists(index=name):
+        es.indices.delete(index=name)
+    es.indices.create(index=name, body={"settings": settings, "mappings": mapping["mappings"]})
+    logger.info(f"✅ Recreated index: {name}")
 
 
 def create_index(es, index_name: str = FRAMESET_GEOMETRY_INDEX):
+    settings = {
+        "analysis": {
+            "analyzer": {
+                "bike_name_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
+            }
+        }
+    }
     mapping = {
         "mappings": {
             "properties": {
@@ -67,13 +36,18 @@ def create_index(es, index_name: str = FRAMESET_GEOMETRY_INDEX):
                 "geometry_spec": {
                     "properties": {
                         "size_label": {"type": "keyword"},
-                        "stack_mm": {"type": "integer"},
+                        "stack_mm": {"type": "integer"},  # Optimized for range queries
                         "reach_mm": {"type": "integer"},
                     }
                 },
                 "definition": {
                     "properties": {
-                        "name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+                        # Change 'name' to 'model_name' to match your serialization
+                        "model_name": {
+                            "type": "text",
+                            "analyzer": "bike_name_analyzer",
+                            "fields": {"keyword": {"type": "keyword"}},
+                        },
                         "material": {"type": "keyword"},
                         "material_group": {"type": "keyword"},
                     }
@@ -81,7 +55,11 @@ def create_index(es, index_name: str = FRAMESET_GEOMETRY_INDEX):
                 "family": {
                     "properties": {
                         "brand_name": {"type": "keyword"},
-                        "family_name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+                        "family_name": {
+                            "type": "text",
+                            "analyzer": "bike_name_analyzer",
+                            "fields": {"keyword": {"type": "keyword"}},
+                        },
                         "category": {"type": "keyword"},
                     }
                 },
@@ -89,12 +67,7 @@ def create_index(es, index_name: str = FRAMESET_GEOMETRY_INDEX):
         }
     }
 
-    if es.indices.exists(index=index_name):
-        logger.info(f"🗑️ Index '{index_name}' exists. Deleting to start fresh...")
-        es.indices.delete(index=index_name)
-
-    es.indices.create(index=index_name, body=mapping)
-    logger.info(f"✅ Created index '{index_name}'.")
+    _recreate_index(es, index_name, settings, mapping)
 
 
 def create_group_index(es, index_name: str = BIKE_PRODUCT_INDEX):
@@ -111,50 +84,97 @@ def create_group_index(es, index_name: str = BIKE_PRODUCT_INDEX):
                 },
                 "definition": {
                     "properties": {
-                        "name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
+                        "model_name": {  # Fixed name to match serialize_definition
+                            "type": "text",
+                            "fields": {"keyword": {"type": "keyword"}},
+                        },
                         "material": {"type": "keyword"},
                         "material_group": {"type": "keyword"},
                     }
                 },
-                "sizes": {"type": "keyword", "index": False},
+                # Enabled keyword indexing for sizes to allow filtering
+                "sizes": {"type": "keyword"},
             }
         }
     }
+    _recreate_index(es, index_name, {}, mapping)
 
-    if es.indices.exists(index=index_name):
-        logger.info(f"🗑️ Index '{index_name}' exists. Deleting to start fresh...")
-        es.indices.delete(index=index_name)
 
-    es.indices.create(index=index_name, body=mapping)
-    logger.info(f"✅ Created index '{index_name}'.")
+def serialize_spec(spec: GeometrySpecORM) -> dict:
+    definition = spec.definition
+    # Note: Using .brand_name/model_name directly from your ORM structure
+    return {
+        "_index": FRAMESET_GEOMETRY_INDEX,
+        "_id": f"spec_{spec.id}",
+        "_source": {
+            "id": spec.id,
+            "geometry_spec": {
+                "size_label": spec.size_label,
+                "stack_mm": int(spec.stack_mm),
+                "reach_mm": int(spec.reach_mm),
+            },
+            "definition": {
+                "model_name": definition.model_name,
+                "material": definition.material,
+                "material_group": get_material_group(definition.material),
+            },
+            "family": {
+                "brand_name": definition.brand_name,
+                "family_name": definition.model_name,  # Or family name if you add that table
+                "category": definition.category,
+            },
+        },
+    }
+
+
+def serialize_definition(definition: BikeDefinitionORM) -> dict:
+    return {
+        "_index": BIKE_PRODUCT_INDEX,
+        "_id": f"def_{definition.id}",
+        "_source": {
+            "id": definition.id,
+            "family": {
+                "brand_name": definition.brand_name,
+                "family_name": definition.model_name,
+                "category": definition.category,
+            },
+            "definition": {
+                "model_name": definition.model_name,
+                "material": definition.material,
+                "material_group": get_material_group(definition.material),
+            },
+            "sizes": [s.size_label for s in definition.geometries],
+        },
+    }
 
 
 def populate_index(es, session):
-    logger.info("🔍 Fetching geometry specs and frame definitions from PostgreSQL...")
+    logger.info("🔍 Fetching data from PostgreSQL...")
 
-    spec_stmt = select(GeometrySpecORM).options(
-        selectinload(GeometrySpecORM.definition).selectinload(FrameDefinitionORM.family)
-    )
+    # 1. Fetch Specs with Definition loaded (no .family, as per your ORM)
+    spec_stmt = select(GeometrySpecORM).options(selectinload(GeometrySpecORM.definition))
     specs = session.scalars(spec_stmt).all()
-    logger.info(f"📐 Found {len(specs)} geometry specs. Serializing...")
+    logger.info(f"📐 Found {len(specs)} geometry specs.")
 
-    def_stmt = select(FrameDefinitionORM).options(
-        selectinload(FrameDefinitionORM.family),
-        selectinload(FrameDefinitionORM.geometries),
-    )
+    # 2. Fetch Definitions with Geometries loaded
+    def_stmt = select(BikeDefinitionORM).options(selectinload(BikeDefinitionORM.geometries))
     definitions = session.scalars(def_stmt).all()
-    logger.info(f"🧱 Found {len(definitions)} frame definitions. Serializing groups...")
+    logger.info(f"🧱 Found {len(definitions)} bike definitions.")
 
     def actions_generator():
+        # Index individual geometry specs (for Fit Search)
         for spec in specs:
             yield serialize_spec(spec)
+
+        # Index high-level bike definitions (for Catalog Search)
         for definition in definitions:
             yield serialize_definition(definition)
 
     logger.info("🚀 Pushing to Elasticsearch...")
-    success, failed = helpers.bulk(es, actions_generator(), stats_only=True)
+    # chunk_size helps keep the request payload manageable
+    success, failed = helpers.bulk(es, actions_generator(), chunk_size=500, stats_only=True)
 
-    logger.info(f"🏁 Done! Successfully indexed: {success}, Failed: {failed}")
+    logger.success(f"🏁 Done! Successfully indexed: {success}, Failed: {failed}")
     return success, failed
 
 

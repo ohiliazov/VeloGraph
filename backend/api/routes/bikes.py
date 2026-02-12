@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from backend.api.schemas import (
     BikeCategory,
+    BikeDefinitionSchema,
     BikeFamilyCreateSchema,
-    BikeFamilySchema,
     FrameDefinitionCreateSchema,
     FrameDefinitionExtendedSchema,
     FrameDefinitionSchema,
@@ -22,21 +22,21 @@ from backend.api.schemas import (
 from backend.core.constants import BIKE_PRODUCT_INDEX, FRAMESET_GEOMETRY_INDEX
 from backend.core.db import get_db
 from backend.core.elasticsearch import get_es_client
-from backend.core.models import BikeFamilyORM, FrameDefinitionORM, GeometrySpecORM
+from backend.core.models import BikeDefinitionORM, FrameDefinitionORM, GeometrySpecORM
 from backend.core.utils import get_material_group
 
 router = APIRouter()
 
 
-@router.get("/families", response_model=list[BikeFamilySchema])
+@router.get("/families", response_model=list[BikeDefinitionSchema])
 def list_families(db: Annotated[Session, Depends(get_db)], limit: int = 100):
-    stmt = select(BikeFamilyORM).limit(limit)
+    stmt = select(BikeDefinitionORM).limit(limit)
     return db.scalars(stmt).all()
 
 
-@router.post("/families", response_model=BikeFamilySchema)
+@router.post("/families", response_model=BikeDefinitionSchema)
 def create_family(data: BikeFamilyCreateSchema, db: Annotated[Session, Depends(get_db)]):
-    new_family = BikeFamilyORM(**data.model_dump())
+    new_family = BikeDefinitionORM(**data.model_dump())
     db.add(new_family)
     db.commit()
     db.refresh(new_family)
@@ -261,7 +261,7 @@ async def sync_definition_to_es(definition: FrameDefinitionORM, es: AsyncElastic
             "category": definition.family.category,
         },
         "definition": {
-            "name": definition.name,
+            "name": definition.model_name,
             "material": definition.material,
             "material_group": get_material_group(definition.material),
         },

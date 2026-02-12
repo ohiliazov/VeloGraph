@@ -1,4 +1,4 @@
-from backend.core.models import BikeFamilyORM, BikeProductORM, BuildKitORM, FrameDefinitionORM, GeometrySpecORM
+from backend.core.models import BikeDefinitionORM, BikeProductORM, BuildKitORM, FrameDefinitionORM, GeometrySpecORM
 
 
 def test_search_geometry(client, mock_es, mock_db):
@@ -6,7 +6,7 @@ def test_search_geometry(client, mock_es, mock_db):
     mock_es.search.return_value = {"hits": {"total": {"value": 1}, "hits": [{"_source": {"id": 1}}]}}
 
     # Mock DB response
-    mock_family = BikeFamilyORM(id=1, brand_name="Kross", family_name="Esker", category="gravel")
+    mock_family = BikeDefinitionORM(id=1, brand_name="Kross", family_name="Esker", category="gravel")
     mock_def = FrameDefinitionORM(id=1, family_id=1, name="Esker", material="Carbon", family=mock_family)
     mock_spec = GeometrySpecORM(
         id=1,
@@ -54,7 +54,7 @@ def test_search_keyword(client, mock_es, mock_db):
     }
 
     # Mock DB response
-    mock_family = BikeFamilyORM(id=1, brand_name="Kross", family_name="Esker", category="gravel")
+    mock_family = BikeDefinitionORM(id=1, brand_name="Kross", family_name="Esker", category="gravel")
     mock_def = FrameDefinitionORM(id=1, family_id=1, name="Esker", material="Carbon", family=mock_family)
     mock_spec = GeometrySpecORM(
         id=1,
@@ -94,7 +94,7 @@ def test_search_keyword(client, mock_es, mock_db):
 
 
 def test_get_bike_product_found(client, mock_db):
-    mock_family = BikeFamilyORM(id=1, brand_name="Kross", family_name="Esker", category="gravel")
+    mock_family = BikeDefinitionORM(id=1, brand_name="Kross", family_name="Esker", category="gravel")
     mock_def = FrameDefinitionORM(id=1, family_id=1, name="Esker", material="Carbon", family=mock_family)
     mock_spec = GeometrySpecORM(
         id=1,
@@ -143,7 +143,7 @@ def test_get_bike_product_not_found(client, mock_db):
 
 
 def test_create_bike_product(client, mock_db, mock_es):
-    mock_family = BikeFamilyORM(id=1, brand_name="Kross", family_name="Esker", category="gravel")
+    mock_family = BikeDefinitionORM(id=1, brand_name="Kross", family_name="Esker", category="gravel")
     mock_def = FrameDefinitionORM(id=1, family_id=1, name="Esker", material="Carbon", family=mock_family)
     mock_spec = GeometrySpecORM(
         id=1,

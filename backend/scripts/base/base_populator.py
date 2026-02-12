@@ -5,7 +5,7 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.core.models import BikeFamilyORM, FrameDefinitionORM, GeometrySpecORM
+from backend.core.models import BikeDefinitionORM, FrameDefinitionORM, GeometrySpecORM
 from backend.utils.helpers import extract_number
 
 
@@ -82,16 +82,16 @@ def build_geometry_payload(specs: dict[str, list[Any]], idx: int, key_map: dict[
     return payload
 
 
-def get_or_create_family(session: Session, brand: str, family_name: str, category: str) -> BikeFamilyORM:
+def get_or_create_family(session: Session, brand: str, family_name: str, category: str) -> BikeDefinitionORM:
     family = session.execute(
-        select(BikeFamilyORM).where(
-            BikeFamilyORM.brand_name == brand,
-            BikeFamilyORM.family_name == family_name,
+        select(BikeDefinitionORM).where(
+            BikeDefinitionORM.brand_name == brand,
+            BikeDefinitionORM.family_name == family_name,
         )
     ).scalar_one_or_none()
 
     if not family:
-        family = BikeFamilyORM(brand_name=brand, family_name=family_name, category=category)
+        family = BikeDefinitionORM(brand_name=brand, family_name=family_name, category=category)
         session.add(family)
         session.flush()
     return family
@@ -103,7 +103,7 @@ def get_or_create_definition(
     frame_def = session.execute(
         select(FrameDefinitionORM).where(
             FrameDefinitionORM.family_id == family_id,
-            FrameDefinitionORM.name == name,
+            FrameDefinitionORM.model_name == name,
             FrameDefinitionORM.material == material,
         )
     ).scalar_one_or_none()

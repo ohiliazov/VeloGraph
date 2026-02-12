@@ -25,7 +25,7 @@ def test_geometry_spec_schema_valid():
         },
     }
     gs = GeometrySpecExtendedSchema(**data)
-    assert gs.definition.name == "Esker"
+    assert gs.definition.model_name == "Esker"
     assert gs.stack_mm == 580
 
 
@@ -71,5 +71,5 @@ def test_bike_product_schema_valid():
     }
     product = BikeProductSchema(**data)
     assert product.sku == "ESKER-6.0-2023"
-    assert product.geometry_spec.definition.name == "Esker"
+    assert product.geometry_spec.definition.model_name == "Esker"
     assert product.build_kit.groupset == "Shimano GRX"

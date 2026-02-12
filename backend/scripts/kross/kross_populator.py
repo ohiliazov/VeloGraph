@@ -9,7 +9,7 @@ from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from backend.core.db import SessionLocal
-from backend.core.models import BikeFamilyORM
+from backend.core.models import BikeDefinitionORM
 from backend.core.utils import get_simple_types
 from backend.scripts.base.base_populator import (
     BaseBikePopulator,
@@ -107,7 +107,7 @@ def main():
 
     with SessionLocal() as session:
         logger.info("🗑️ Clearing existing 'Kross' families from database...")
-        session.execute(delete(BikeFamilyORM).where(BikeFamilyORM.brand_name == "Kross"))
+        session.execute(delete(BikeDefinitionORM).where(BikeDefinitionORM.brand_name == "Kross"))
         session.commit()
 
     with SessionLocal() as session:

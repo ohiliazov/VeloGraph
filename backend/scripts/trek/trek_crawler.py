@@ -8,7 +8,7 @@ from backend.scripts.constants import artifacts_dir
 
 class TrekAPICrawler:
     def __init__(self):
-        self.client = httpx.Client(base_url="https://api.trekbikes.com/occ/v2/pl")
+        self.client = httpx.Client(base_url="https://api.trekbikes.com/occ/v2/gb")
         self.trek_artifacts = artifacts_dir / "trek"
         self.output_path = self.trek_artifacts / "all_product_codes.json"
         self.output_json_dir = self.trek_artifacts / "raw_jsons"
