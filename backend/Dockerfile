@@ -1,75 +1,60 @@
-# -------- Builder stage: build deps into a venv --------
-FROM python:3.14-slim AS builder
+# -------- Base stage: Shared settings --------
+FROM python:3.14-slim AS base
 
 ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-# System build deps for compiling wheels
+WORKDIR /app
+
+# -------- Builder stage: Compile dependencies --------
+FROM base AS builder
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
-
-# Copy only dependency manifests first to leverage Docker layer caching
-COPY requirements.txt ./
-
-# Create venv and install deps
+COPY requirements.txt .
 RUN python -m venv "$VIRTUAL_ENV" \
- && pip install --upgrade pip \
- && pip install --no-cache-dir -r requirements.txt
+    && pip install --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
 # -------- Development stage --------
-FROM python:3.14-slim AS dev
+FROM base AS dev
 
-ENV VIRTUAL_ENV=/opt/venv
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-
-# Include headers for possible native builds in dev
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+COPY --from=builder "$VIRTUAL_ENV" "$VIRTUAL_ENV"
 
-# Install python deps in a venv (editable dev experience via bind-mount)
-COPY requirements.txt /tmp/requirements.txt
-RUN python -m venv "$VIRTUAL_ENV" \
- && pip install --upgrade pip \
- && pip install --no-cache-dir -r /tmp/requirements.txt
-
-# Copy source (can be overridden by volume in docker-compose for live reload)
-COPY . /app/backend/
+COPY . .
+RUN chmod +x docker_entrypoint.sh
 
 EXPOSE 8000
-
-# Dev server with reload
+ENTRYPOINT ["./docker_entrypoint.sh"]
 CMD ["uvicorn", "backend.__main__:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
-# -------- Production runtime stage: slim image with runtime libs only --------
-FROM python:3.14-slim AS prod
+# -------- Production stage --------
+FROM base AS prod
 
-# Install only runtime libraries (no compilers)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
-ENV VIRTUAL_ENV=/opt/venv
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+COPY --from=builder "$VIRTUAL_ENV" "$VIRTUAL_ENV"
 
-WORKDIR /app
+COPY . .
+RUN chmod +x docker_entrypoint.sh
 
-# Bring in the prebuilt virtualenv from builder
-COPY --from=builder /opt/venv /opt/venv
+# Security: Run as non-root user (Standard Production Practice)
+RUN useradd -m appuser && chown -R appuser:appuser /app
+USER appuser
 
-# Copy application code (keep module path as in original image)
-COPY . /app/backend/
-
-# Expose port
 EXPOSE 8000
-
-# Default command (no reload)
+ENTRYPOINT ["./docker_entrypoint.sh"]
 CMD ["uvicorn", "backend.__main__:app", "--host", "0.0.0.0", "--port", "8000"]

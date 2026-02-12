@@ -9,6 +9,46 @@ from backend.core.db import SessionLocal
 from backend.core.models import BikeDefinitionORM, GeometrySpecORM
 from backend.core.utils import get_bike_categories, get_material_group
 
+BIKE_GEOMETRY_INDEX_SETTINGS = {
+    "analysis": {
+        "analyzer": {
+            "bike_name_analyzer": {
+                "type": "custom",
+                "tokenizer": "standard",
+                "filter": ["lowercase", "asciifolding"],
+            }
+        }
+    }
+}
+
+BIKE_PRODUCT_INDEX_MAPPING = {
+    "mappings": {
+        "properties": {
+            "id": {"type": "integer"},
+            "geometry_spec": {
+                "properties": {
+                    "size_label": {"type": "keyword"},
+                    "stack_mm": {"type": "integer"},
+                    "reach_mm": {"type": "integer"},
+                }
+            },
+            "definition": {
+                "properties": {
+                    "brand_name": {"type": "keyword"},
+                    "model_name": {
+                        "type": "text",
+                        "analyzer": "bike_name_analyzer",
+                        "fields": {"keyword": {"type": "keyword"}},
+                    },
+                    "category": {"type": "keyword"},
+                    "material": {"type": "keyword"},
+                    "material_group": {"type": "keyword"},
+                }
+            },
+        }
+    }
+}
+
 
 def _recreate_index(es, name, settings, mapping):
     if es.indices.exists(index=name):
@@ -18,46 +58,7 @@ def _recreate_index(es, name, settings, mapping):
 
 
 def create_index(es, index_name: str = FRAMESET_GEOMETRY_INDEX):
-    settings = {
-        "analysis": {
-            "analyzer": {
-                "bike_name_analyzer": {
-                    "type": "custom",
-                    "tokenizer": "standard",
-                    "filter": ["lowercase", "asciifolding"],
-                }
-            }
-        }
-    }
-    mapping = {
-        "mappings": {
-            "properties": {
-                "id": {"type": "integer"},
-                "geometry_spec": {
-                    "properties": {
-                        "size_label": {"type": "keyword"},
-                        "stack_mm": {"type": "integer"},
-                        "reach_mm": {"type": "integer"},
-                    }
-                },
-                "definition": {
-                    "properties": {
-                        "brand_name": {"type": "keyword"},
-                        "model_name": {
-                            "type": "text",
-                            "analyzer": "bike_name_analyzer",
-                            "fields": {"keyword": {"type": "keyword"}},
-                        },
-                        "category": {"type": "keyword"},
-                        "material": {"type": "keyword"},
-                        "material_group": {"type": "keyword"},
-                    }
-                },
-            }
-        }
-    }
-
-    _recreate_index(es, index_name, settings, mapping)
+    _recreate_index(es, index_name, BIKE_GEOMETRY_INDEX_SETTINGS, BIKE_PRODUCT_INDEX_MAPPING)
 
 
 def create_group_index(es, index_name: str = BIKE_PRODUCT_INDEX):
@@ -185,4 +186,17 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    es = Elasticsearch(es_settings.url)
+
+    if not es.ping():
+        logger.error(f"❌ Connection failed: {es_settings.url}")
+        exit(1)
+
+    create_index(es, FRAMESET_GEOMETRY_INDEX)
+    create_group_index(es, BIKE_PRODUCT_INDEX)
+
+    with SessionLocal() as session:
+        try:
+            populate_index(es, session)
+        except Exception as e:
+            logger.exception(f"🚨 Population failed: {e}")
