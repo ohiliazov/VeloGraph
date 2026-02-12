@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { FrameDefinition, GeometrySpec } from "../../../../types";
+import { BikeDefinition, GeometrySpec } from "../../../../types";
 import { useLanguage } from "../../../../context/LanguageContext";
 import LanguageSwitcher from "../../../../components/LanguageSwitcher";
 
@@ -11,7 +11,7 @@ export default function BikeEditPage() {
   const { id } = useParams();
   const router = useRouter();
   const { t } = useLanguage();
-  const [bike, setBike] = useState<FrameDefinition | null>(null);
+  const [bike, setBike] = useState<BikeDefinition | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +23,7 @@ export default function BikeEditPage() {
           `http://localhost:8000/api/bikes/definitions/${id}`,
         );
         if (!res.ok) throw new Error("Failed to fetch bike details");
-        const data: FrameDefinition = await res.json();
+        const data: BikeDefinition = await res.json();
         setBike(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : "An error occurred");

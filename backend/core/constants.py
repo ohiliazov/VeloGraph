@@ -1,22 +1,36 @@
 import re
-
-from backend.api.schemas import BikeCategory, MaterialGroup
+from enum import StrEnum
 
 FRAMESET_GEOMETRY_INDEX = "frameset_geometry"
 BIKE_PRODUCT_INDEX = "bike_products"
 
+
+class BikeCategory(StrEnum):
+    ROAD = "road"
+    MOUNTAIN = "mountain"
+    GRAVEL = "gravel"
+    TOURING = "touring"
+    HYBRID = "hybrid"
+    CITY = "city"
+    KIDS = "kids"
+    OTHER = "other"
+
+
+class MaterialGroup(StrEnum):
+    CARBON = "carbon"
+    ALUMINUM = "aluminum"
+    STEEL = "steel"
+    TITANIUM = "titanium"
+    OTHER = "other"
+
+
 CATEGORY_PATTERNS = {
-    BikeCategory.GRAVEL: re.compile(r"gravel", re.IGNORECASE),
-    BikeCategory.MTB: re.compile(r"mtb|górsk|fuel|supercaliber|session|caliber", re.IGNORECASE),
-    BikeCategory.TREKKING: re.compile(r"trekking|mahon|suvea|zing|elan|nhoma", re.IGNORECASE),
-    BikeCategory.CROSS: re.compile(r"cross|hybryd", re.IGNORECASE),
-    BikeCategory.ROAD: re.compile(r"szos|road|domane|madone|emonda|checkpoint", re.IGNORECASE),
-    BikeCategory.CITY: re.compile(
-        r"miejsk|city|town|mieście|cruiser|loft|bali|shibori|ghostrider|zouma", re.IGNORECASE
-    ),
-    BikeCategory.KIDS: re.compile(r"dzieci|kids|junior|precaliber|kickster|wahoo", re.IGNORECASE),
-    BikeCategory.TOURING: re.compile(r"touring|wypraw|turyst", re.IGNORECASE),
-    BikeCategory.WOMEN: re.compile(r"damsk|women", re.IGNORECASE),
+    BikeCategory.ROAD: re.compile(r"road|triathlon", re.IGNORECASE),
+    BikeCategory.MOUNTAIN: re.compile(r"mountain|trail|downhill", re.IGNORECASE),
+    BikeCategory.GRAVEL: re.compile(r"gravel|cross country", re.IGNORECASE),
+    BikeCategory.TOURING: re.compile(r"touring|trekking", re.IGNORECASE),
+    BikeCategory.HYBRID: re.compile(r"hybrid|fitness|active|verve|city", re.IGNORECASE),
+    BikeCategory.KIDS: re.compile(r"kids", re.IGNORECASE),
 }
 
 MATERIAL_PATTERNS = {

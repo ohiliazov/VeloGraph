@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from backend.core.db import SessionLocal
 from backend.core.models import BikeDefinitionORM
-from backend.core.utils import get_simple_types
+from backend.core.utils import get_bike_categories
 from backend.scripts.base.base_populator import (
     BaseBikePopulator,
     build_geometry_payload,
@@ -57,7 +57,7 @@ class TrekBikePopulator(BaseBikePopulator):
         categories = meta.get("categories", [])
         model_year = meta.get("model_year")
 
-        category = get_simple_types(categories)[0] if categories else "other"
+        category = get_bike_categories(categories)[0] if categories else "other"
 
         # Use frame_name if available to determine the family more accurately
         # but still use the broad family name (e.g. Madone) if possible.

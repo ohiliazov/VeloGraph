@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import BikeFrameSVG from "../../../components/BikeFrameSVG";
-import { FrameDefinition } from "../../../types";
+import { BikeDefinition } from "../../../types";
 import { useLanguage } from "../../../context/LanguageContext";
 import { useComparison } from "../../../context/ComparisonContext";
 import LanguageSwitcher from "../../../components/LanguageSwitcher";
@@ -17,7 +17,7 @@ function BikeDetailContent() {
   const { t } = useLanguage();
   const { addToCompare, removeFromCompare, isInComparison, comparisonList } =
     useComparison();
-  const [group, setGroup] = useState<FrameDefinition | null>(null);
+  const [group, setGroup] = useState<BikeDefinition | null>(null);
   const [selectedProductId, setSelectedProductId] = useState<number | null>(
     null,
   );
@@ -32,7 +32,7 @@ function BikeDetailContent() {
           `http://localhost:8000/api/bikes/definitions/${id}`,
         );
         if (!res.ok) throw new Error("Failed to fetch bike details");
-        const data: FrameDefinition = await res.json();
+        const data: BikeDefinition = await res.json();
         setGroup(data);
         if (data.geometries && data.geometries.length > 0) {
           // If the 'size' in URL is one of the geometries, select it
@@ -123,9 +123,26 @@ function BikeDetailContent() {
           <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">
             {group.brand_name} {group.model_name}
           </h1>
-          <p className="text-xl text-gray-600 dark:text-gray-400 mt-2">
-            {group.category} {group.year_start && `(${group.year_start})`}
-          </p>
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            {group.simple_categories?.map((cat) => (
+              <span
+                key={cat}
+                className="text-xs font-semibold px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800"
+              >
+                {cat}
+              </span>
+            ))}
+            {group.simple_material && (
+              <span className="text-xs font-semibold px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                {group.simple_material}
+              </span>
+            )}
+            {group.year_start && (
+              <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">
+                ({group.year_start})
+              </span>
+            )}
+          </div>
         </header>
 
         <div className="flex flex-wrap items-center gap-4 mb-8 bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm"></div>
@@ -148,7 +165,7 @@ function BikeDetailContent() {
               {t.ui.material}
             </h3>
             <p className="text-lg font-medium text-gray-900 dark:text-gray-100">
-              {group.material || "N/A"}
+              {group.material || group.simple_material || "N/A"}
             </p>
           </div>
         </div>

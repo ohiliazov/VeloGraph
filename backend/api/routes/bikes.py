@@ -14,10 +14,9 @@ from backend.api.schemas import (
     GeometrySpecExtendedSchema,
     GeometrySpecSchema,
     GroupedSearchResult,
-    MaterialGroup,
     SearchResult,
 )
-from backend.core.constants import BIKE_PRODUCT_INDEX, FRAMESET_GEOMETRY_INDEX
+from backend.core.constants import BIKE_PRODUCT_INDEX, FRAMESET_GEOMETRY_INDEX, MaterialGroup
 from backend.core.db import get_db
 from backend.core.elasticsearch import get_es_client
 from backend.core.models import BikeDefinitionORM, GeometrySpecORM

@@ -7,7 +7,7 @@ from backend.config import es_settings
 from backend.core.constants import BIKE_PRODUCT_INDEX, FRAMESET_GEOMETRY_INDEX
 from backend.core.db import SessionLocal
 from backend.core.models import BikeDefinitionORM, GeometrySpecORM
-from backend.core.utils import get_material_group
+from backend.core.utils import get_bike_categories, get_material_group
 
 
 def _recreate_index(es, name, settings, mapping):
@@ -36,31 +36,21 @@ def create_index(es, index_name: str = FRAMESET_GEOMETRY_INDEX):
                 "geometry_spec": {
                     "properties": {
                         "size_label": {"type": "keyword"},
-                        "stack_mm": {"type": "integer"},  # Optimized for range queries
+                        "stack_mm": {"type": "integer"},
                         "reach_mm": {"type": "integer"},
                     }
                 },
                 "definition": {
                     "properties": {
-                        # Change 'name' to 'model_name' to match your serialization
+                        "brand_name": {"type": "keyword"},
                         "model_name": {
                             "type": "text",
                             "analyzer": "bike_name_analyzer",
                             "fields": {"keyword": {"type": "keyword"}},
                         },
+                        "category": {"type": "keyword"},
                         "material": {"type": "keyword"},
                         "material_group": {"type": "keyword"},
-                    }
-                },
-                "family": {
-                    "properties": {
-                        "brand_name": {"type": "keyword"},
-                        "family_name": {
-                            "type": "text",
-                            "analyzer": "bike_name_analyzer",
-                            "fields": {"keyword": {"type": "keyword"}},
-                        },
-                        "category": {"type": "keyword"},
                     }
                 },
             }
@@ -75,19 +65,14 @@ def create_group_index(es, index_name: str = BIKE_PRODUCT_INDEX):
         "mappings": {
             "properties": {
                 "id": {"type": "integer"},
-                "family": {
-                    "properties": {
-                        "brand_name": {"type": "keyword"},
-                        "family_name": {"type": "text", "fields": {"keyword": {"type": "keyword"}}},
-                        "category": {"type": "keyword"},
-                    }
-                },
                 "definition": {
                     "properties": {
-                        "model_name": {  # Fixed name to match serialize_definition
+                        "brand_name": {"type": "keyword"},
+                        "model_name": {
                             "type": "text",
                             "fields": {"keyword": {"type": "keyword"}},
                         },
+                        "category": {"type": "keyword"},
                         "material": {"type": "keyword"},
                         "material_group": {"type": "keyword"},
                     }
@@ -114,14 +99,11 @@ def serialize_spec(spec: GeometrySpecORM) -> dict:
                 "reach_mm": int(spec.reach_mm),
             },
             "definition": {
+                "brand_name": definition.brand_name,
                 "model_name": definition.model_name,
+                "category": get_bike_categories(definition.category),
                 "material": definition.material,
                 "material_group": get_material_group(definition.material),
-            },
-            "family": {
-                "brand_name": definition.brand_name,
-                "family_name": definition.model_name,  # Or family name if you add that table
-                "category": definition.category,
             },
         },
     }
@@ -133,12 +115,9 @@ def serialize_definition(definition: BikeDefinitionORM) -> dict:
         "_id": f"def_{definition.id}",
         "_source": {
             "id": definition.id,
-            "family": {
-                "brand_name": definition.brand_name,
-                "family_name": definition.model_name,
-                "category": definition.category,
-            },
             "definition": {
+                "brand_name": definition.brand_name,
+                "category": get_bike_categories(definition.category),
                 "model_name": definition.model_name,
                 "material": definition.material,
                 "material_group": get_material_group(definition.material),

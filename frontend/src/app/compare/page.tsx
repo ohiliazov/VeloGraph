@@ -147,7 +147,14 @@ export default function ComparisonPage() {
                       key={idx}
                       className="py-3 px-6 border-r dark:border-gray-800 text-xs dark:text-gray-300"
                     >
-                      {item.geometry.definition?.material || "-"}
+                      <div className="flex flex-col gap-1">
+                        <span>{item.geometry.definition?.material || "-"}</span>
+                        {item.geometry.definition?.simple_material && (
+                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">
+                            {item.geometry.definition.simple_material}
+                          </span>
+                        )}
+                      </div>
                     </td>
                   ))}
                 </tr>

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import BikeFrameSVG from "./BikeFrameSVG";
 import {
-  FrameDefinition,
+  BikeDefinition,
   GeometrySpec,
   SearchResult,
   GroupedSearchResult,
@@ -26,9 +26,7 @@ export default function BikeSearch() {
   const [activeTab, setActiveTab] = useState<"geometry" | "keyword">(
     "geometry",
   );
-  const [results, setResults] = useState<GeometrySpec[] | FrameDefinition[]>(
-    [],
-  );
+  const [results, setResults] = useState<GeometrySpec[] | BikeDefinition[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -489,7 +487,7 @@ export default function BikeSearch() {
                   if (!geometry) return null;
 
                   const definition = isGroup
-                    ? (item as FrameDefinition)
+                    ? (item as BikeDefinition)
                     : (item as GeometrySpec).definition;
 
                   // Visualization range based on average size differences
@@ -545,12 +543,19 @@ export default function BikeSearch() {
                               {definition?.brand_name} {definition?.model_name}
                             </Link>
                             <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                              <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">
-                                {definition?.category}
-                              </span>
-                              <span className="text-[10px] font-extrabold text-blue-500 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/30 px-2 py-0.5 rounded-md uppercase tracking-wider border border-blue-100/50 dark:border-blue-900/50">
-                                {definition?.material || "N/A"}
-                              </span>
+                              {definition?.simple_categories?.map((cat) => (
+                                <span
+                                  key={cat}
+                                  className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700"
+                                >
+                                  {cat}
+                                </span>
+                              ))}
+                              {definition?.simple_material && (
+                                <span className="text-[10px] font-extrabold text-blue-500 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/30 px-2 py-0.5 rounded-md uppercase tracking-wider border border-blue-100/50 dark:border-blue-900/50">
+                                  {definition.simple_material}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -558,7 +563,7 @@ export default function BikeSearch() {
                       <td className="px-6 py-5 text-center">
                         {isGroup ? (
                           <div className="flex flex-wrap justify-center gap-1.5">
-                            {(item as FrameDefinition).geometries?.map((g) => (
+                            {(item as BikeDefinition).geometries?.map((g) => (
                               <button
                                 key={g.id}
                                 onClick={() =>

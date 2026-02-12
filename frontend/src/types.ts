@@ -1,13 +1,11 @@
 export enum BikeCategory {
-  GRAVEL = "gravel",
-  MTB = "mtb",
-  TREKKING = "trekking",
-  CROSS = "cross",
   ROAD = "road",
+  MOUNTAIN = "mountain",
+  GRAVEL = "gravel",
+  TOURING = "touring",
+  HYBRID = "hybrid",
   CITY = "city",
   KIDS = "kids",
-  TOURING = "touring",
-  WOMEN = "women",
   OTHER = "other",
 }
 
@@ -36,14 +34,16 @@ export interface GeometrySpec {
   fork_offset_mm: number | null;
   trail_mm: number | null;
   standover_height_mm: number | null;
-  definition?: FrameDefinition;
+  definition?: BikeDefinition;
 }
 
-export interface FrameDefinition {
+export interface BikeDefinition {
   id: number;
   brand_name: string;
   model_name: string;
   category: string;
+  simple_categories: BikeCategory[];
+  simple_material: MaterialGroup | null;
   year_start: number | null;
   year_end: number | null;
   material: string | null;
@@ -76,7 +76,7 @@ export interface BikeProduct {
 }
 
 export interface BikeGroup {
-  definition: FrameDefinition;
+  definition: BikeDefinition;
   products: BikeProduct[];
 }
 
@@ -116,5 +116,5 @@ export interface SearchResult {
 
 export interface GroupedSearchResult {
   total: number;
-  items: FrameDefinition[];
+  items: BikeDefinition[];
 }

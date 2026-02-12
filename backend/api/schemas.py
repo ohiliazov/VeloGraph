@@ -1,27 +1,7 @@
-from enum import StrEnum
+from pydantic import BaseModel, ConfigDict, model_validator
 
-from pydantic import BaseModel, ConfigDict
-
-
-class BikeCategory(StrEnum):
-    GRAVEL = "gravel"
-    MTB = "mtb"
-    TREKKING = "trekking"
-    CROSS = "cross"
-    ROAD = "road"
-    CITY = "city"
-    KIDS = "kids"
-    TOURING = "touring"
-    WOMEN = "women"
-    OTHER = "other"
-
-
-class MaterialGroup(StrEnum):
-    CARBON = "carbon"
-    ALUMINUM = "aluminum"
-    STEEL = "steel"
-    TITANIUM = "titanium"
-    OTHER = "other"
+from backend.core.constants import BikeCategory, MaterialGroup
+from backend.core.utils import get_bike_categories, get_material_group
 
 
 class BikeDefinitionSchema(BaseModel):
@@ -34,6 +14,16 @@ class BikeDefinitionSchema(BaseModel):
     material: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    simple_categories: list[BikeCategory] = []
+    simple_material: MaterialGroup | None = None
+
+    @model_validator(mode="after")
+    def set_simple_fields(self):
+        self.simple_categories = get_bike_categories(self.category)
+        if self.material:
+            self.simple_material = get_material_group(self.material)
+        return self
 
 
 class GeometrySpecBaseSchema(BaseModel):
