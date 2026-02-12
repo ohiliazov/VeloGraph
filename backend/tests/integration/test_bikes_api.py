@@ -1,4 +1,4 @@
-from backend.core.models import BikeDefinitionORM, BikeProductORM, BuildKitORM, FrameDefinitionORM, GeometrySpecORM
+from core.models import BikeDefinitionORM, BikeProductORM, BuildKitORM, FrameDefinitionORM, GeometrySpecORM
 
 
 def test_search_geometry(client, mock_es, mock_db):

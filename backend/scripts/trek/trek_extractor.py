@@ -6,9 +6,9 @@ from pathlib import Path
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from backend.api.schemas import BikeDefinitionSchema, GeometrySpecBaseSchema
-from backend.scripts.constants import artifacts_dir
-from backend.scripts.schemas import ExtractedData
+from api.schemas import BikeDefinitionSchema, GeometrySpecBaseSchema
+from scripts.constants import artifacts_dir
+from scripts.schemas import ExtractedData
 
 FLOAT_REGEX = re.compile(r"-?\d+(?:\.\d+)?")
 

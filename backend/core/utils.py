@@ -1,4 +1,4 @@
-from backend.core.constants import CATEGORY_PATTERNS, MATERIAL_PATTERNS, BikeCategory, MaterialGroup
+from core.constants import CATEGORY_PATTERNS, MATERIAL_PATTERNS, BikeCategory, MaterialGroup
 
 
 def get_bike_categories(category_str: str) -> list[BikeCategory]:

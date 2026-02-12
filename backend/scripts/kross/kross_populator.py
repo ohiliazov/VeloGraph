@@ -8,10 +8,10 @@ from loguru import logger
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-from backend.core.db import SessionLocal
-from backend.core.models import BikeDefinitionORM
-from backend.core.utils import get_bike_categories
-from backend.scripts.base.base_populator import (
+from core.db import SessionLocal
+from core.models import BikeDefinitionORM
+from core.utils import get_bike_categories
+from scripts.base.base_populator import (
     BaseBikePopulator,
     build_geometry_payload,
     get_or_create_definition,
@@ -19,7 +19,7 @@ from backend.scripts.base.base_populator import (
     get_or_create_geometry_spec,
     normalize_label,
 )
-from backend.scripts.constants import artifacts_dir
+from scripts.constants import artifacts_dir
 
 SPEC_KEYS_MAP = {
     "stack": "stack_mm",

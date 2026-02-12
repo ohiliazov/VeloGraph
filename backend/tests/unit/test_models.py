@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from backend.core.models import GeometryData
+from core.models import GeometryData
 
 
 def test_geometry_data_valid():

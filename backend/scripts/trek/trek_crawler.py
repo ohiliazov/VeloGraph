@@ -3,7 +3,7 @@ import json
 import httpx
 from loguru import logger
 
-from backend.scripts.constants import artifacts_dir
+from scripts.constants import artifacts_dir
 
 
 class TrekAPICrawler:

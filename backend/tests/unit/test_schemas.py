@@ -1,4 +1,4 @@
-from backend.api.schemas import BikeProductSchema, GeometrySpecExtendedSchema
+from api.schemas import BikeProductSchema, GeometrySpecExtendedSchema
 
 
 def test_geometry_spec_schema_valid():

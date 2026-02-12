@@ -32,12 +32,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder "$VIRTUAL_ENV" "$VIRTUAL_ENV"
 
+# Copy code (usually overridden by volume in docker-compose)
 COPY . .
 RUN chmod +x docker_entrypoint.sh
 
-EXPOSE 8000
 ENTRYPOINT ["./docker_entrypoint.sh"]
-CMD ["uvicorn", "backend.__main__:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
 # -------- Production stage --------
 FROM base AS prod
@@ -46,15 +46,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
+# Create user first so we can use it in COPY --chown
+RUN useradd -m appuser
+WORKDIR /app
+
 COPY --from=builder "$VIRTUAL_ENV" "$VIRTUAL_ENV"
 
-COPY . .
+# COPY with --chown is the "gold standard" for security/permissions
+COPY --chown=appuser:appuser . .
 RUN chmod +x docker_entrypoint.sh
 
-# Security: Run as non-root user (Standard Production Practice)
-RUN useradd -m appuser && chown -R appuser:appuser /app
 USER appuser
 
-EXPOSE 8000
 ENTRYPOINT ["./docker_entrypoint.sh"]
-CMD ["uvicorn", "backend.__main__:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

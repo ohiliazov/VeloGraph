@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from backend.api.schemas import BikeDefinitionSchema, GeometrySpecBaseSchema
+from api.schemas import BikeDefinitionSchema, GeometrySpecBaseSchema
 
 
 class ExtractedData(BaseModel):

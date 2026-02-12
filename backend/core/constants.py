@@ -1,9 +1,6 @@
 import re
 from enum import StrEnum
 
-FRAMESET_GEOMETRY_INDEX = "frameset_geometry"
-BIKE_PRODUCT_INDEX = "bike_products"
-
 
 class BikeCategory(StrEnum):
     ROAD = "road"

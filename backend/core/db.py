@@ -4,8 +4,8 @@ from loguru import logger
 from sqlalchemy import create_engine, exc
 from sqlalchemy.orm import sessionmaker
 
-from backend.config import pg_settings
-from backend.core.models import Base
+from config import pg_settings
+from core.models import Base
 
 engine = create_engine(pg_settings.connection_string)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

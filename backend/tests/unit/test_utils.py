@@ -1,4 +1,4 @@
-from backend.core.utils import get_bike_categories
+from core.utils import get_bike_categories
 
 
 def test_get_simple_types_empty():

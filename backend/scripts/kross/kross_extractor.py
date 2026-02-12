@@ -7,10 +7,10 @@ from typing import ClassVar
 from loguru import logger
 from selectolax.lexbor import LexborHTMLParser
 
-from backend.api.schemas import BikeDefinitionSchema, GeometrySpecBaseSchema
-from backend.scripts.constants import artifacts_dir
-from backend.scripts.schemas import ExtractedData
-from backend.utils.helpers import extract_number
+from api.schemas import BikeDefinitionSchema, GeometrySpecBaseSchema
+from scripts.constants import artifacts_dir
+from scripts.schemas import ExtractedData
+from utils.helpers import extract_number
 
 
 class KrossBikeExtractor:

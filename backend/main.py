@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api.routes import bikes
+from api.routes import bikes
 
 app = FastAPI(title="VeloGraph API")
 

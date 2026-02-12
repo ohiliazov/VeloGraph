@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.api.schemas import (
+from api.schemas import (
     BikeCategory,
     BikeDefinitionCreateSchema,
     BikeDefinitionExtendedSchema,
@@ -16,11 +16,11 @@ from backend.api.schemas import (
     GroupedSearchResult,
     SearchResult,
 )
-from backend.core.constants import BIKE_PRODUCT_INDEX, FRAMESET_GEOMETRY_INDEX, MaterialGroup
-from backend.core.db import get_db
-from backend.core.elasticsearch import get_es_client
-from backend.core.models import BikeDefinitionORM, GeometrySpecORM
-from backend.core.utils import get_material_group
+from core.constants import MaterialGroup
+from core.db import get_db
+from core.elasticsearch import BIKE_INDEX_NAME, GEOMETRY_INDEX_NAME, get_es_client
+from core.models import BikeDefinitionORM, GeometrySpecORM
+from core.utils import get_material_group
 
 router = APIRouter()
 
@@ -64,7 +64,7 @@ async def search_geometry(
     if category:
         filters.append({"term": {"definition.category": category.value}})
     if material:
-        filters.append({"term": {"definition.material_group": material.value}})
+        filters.append({"term": {"definition.material": material.value}})
 
     sort = [
         {
@@ -87,7 +87,7 @@ async def search_geometry(
     query = {"bool": {"filter": filters}}
     from_ = (page - 1) * size
 
-    resp = await es.search(index=FRAMESET_GEOMETRY_INDEX, query=query, sort=sort, from_=from_, size=size)
+    resp = await es.search(index=GEOMETRY_INDEX_NAME, query=query, sort=sort, from_=from_, size=size)
     total = resp["hits"]["total"]["value"]
     spec_ids = [hit["_source"]["id"] for hit in resp["hits"]["hits"]]
 
@@ -122,7 +122,7 @@ async def search_keyword(
     if category:
         filters.append({"term": {"definition.category": category.value}})
     if material:
-        filters.append({"term": {"definition.material_group": material.value}})
+        filters.append({"term": {"definition.material": material.value}})
 
     must = []
     if q:
@@ -148,7 +148,7 @@ async def search_keyword(
     query = {"bool": {"must": must, "filter": filters}}
     from_ = (page - 1) * size
 
-    resp = await es.search(index=BIKE_PRODUCT_INDEX, query=query, sort=sort, from_=from_, size=size)
+    resp = await es.search(index=BIKE_INDEX_NAME, query=query, sort=sort, from_=from_, size=size)
     total = resp["hits"]["total"]["value"]
 
     def_ids = [hit["_source"]["id"] for hit in resp["hits"]["hits"]]
@@ -217,7 +217,7 @@ async def delete_geometry_spec(
     db.delete(spec)
     db.commit()
 
-    await es.delete(index=FRAMESET_GEOMETRY_INDEX, id=str(spec_id), ignore=[404], refresh=True)
+    await es.delete(index=GEOMETRY_INDEX_NAME, id=str(spec_id), ignore=[404], refresh=True)
 
     # Re-sync parent definition to BIKE_PRODUCT_INDEX
     stmt = (
@@ -229,7 +229,7 @@ async def delete_geometry_spec(
     )
     definition = db.scalar(stmt)
     if not definition or not definition.geometries:
-        await es.delete(index=BIKE_PRODUCT_INDEX, id=str(def_id), ignore=[404], refresh=True)
+        await es.delete(index=BIKE_INDEX_NAME, id=str(def_id), ignore=[404], refresh=True)
     else:
         await sync_definition_to_es(definition, es)
 
@@ -249,4 +249,4 @@ async def sync_definition_to_es(definition: BikeDefinitionORM, es: AsyncElastics
         },
         "sizes": [s.size_label for s in definition.geometries],
     }
-    await es.index(index=BIKE_PRODUCT_INDEX, id=str(definition.id), document=doc, refresh=True)
+    await es.index(index=BIKE_INDEX_NAME, id=str(definition.id), document=doc, refresh=True)

@@ -5,8 +5,8 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.core.models import BikeDefinitionORM, FrameDefinitionORM, GeometrySpecORM
-from backend.utils.helpers import extract_number
+from core.models import BikeDefinitionORM, FrameDefinitionORM, GeometrySpecORM
+from utils.helpers import extract_number
 
 
 class BaseBikePopulator:

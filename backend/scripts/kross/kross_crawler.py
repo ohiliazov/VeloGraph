@@ -5,7 +5,7 @@ from loguru import logger
 from playwright.sync_api import Error, Page, Route, sync_playwright
 from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from backend.scripts.constants import artifacts_dir
+from scripts.constants import artifacts_dir
 
 
 def route_resource_type_handler(r: Route) -> None:

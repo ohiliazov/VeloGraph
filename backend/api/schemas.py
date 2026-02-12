@@ -1,7 +1,7 @@
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from backend.core.constants import BikeCategory, MaterialGroup
-from backend.core.utils import get_bike_categories, get_material_group
+from core.constants import BikeCategory, MaterialGroup
+from core.utils import get_bike_categories, get_material_group
 
 
 class BikeDefinitionSchema(BaseModel):

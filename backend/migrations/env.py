@@ -6,10 +6,10 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 # add your project root to sys.path
-sys.path.append(str(Path(__file__).resolve().parents[2]))
+sys.path.append(str(Path(__file__).absolute().parent.parent))
 
-from backend.config import pg_settings
-from backend.core.models import Base
+from config import pg_settings
+from core.models import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

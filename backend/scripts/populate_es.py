@@ -3,94 +3,30 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from backend.config import es_settings
-from backend.core.constants import BIKE_PRODUCT_INDEX, FRAMESET_GEOMETRY_INDEX
-from backend.core.db import SessionLocal
-from backend.core.models import BikeDefinitionORM, GeometrySpecORM
-from backend.core.utils import get_bike_categories, get_material_group
-
-BIKE_GEOMETRY_INDEX_SETTINGS = {
-    "analysis": {
-        "analyzer": {
-            "bike_name_analyzer": {
-                "type": "custom",
-                "tokenizer": "standard",
-                "filter": ["lowercase", "asciifolding"],
-            }
-        }
-    }
-}
-
-BIKE_PRODUCT_INDEX_MAPPING = {
-    "mappings": {
-        "properties": {
-            "id": {"type": "integer"},
-            "geometry_spec": {
-                "properties": {
-                    "size_label": {"type": "keyword"},
-                    "stack_mm": {"type": "integer"},
-                    "reach_mm": {"type": "integer"},
-                }
-            },
-            "definition": {
-                "properties": {
-                    "brand_name": {"type": "keyword"},
-                    "model_name": {
-                        "type": "text",
-                        "analyzer": "bike_name_analyzer",
-                        "fields": {"keyword": {"type": "keyword"}},
-                    },
-                    "category": {"type": "keyword"},
-                    "material": {"type": "keyword"},
-                    "material_group": {"type": "keyword"},
-                }
-            },
-        }
-    }
-}
+from config import es_settings
+from core.db import SessionLocal
+from core.elasticsearch import (
+    BIKE_INDEX_MAPPING,
+    BIKE_INDEX_NAME,
+    GEOMETRY_INDEX_MAPPING,
+    GEOMETRY_INDEX_NAME,
+    GEOMETRY_INDEX_SETTINGS,
+)
+from core.models import BikeDefinitionORM, GeometrySpecORM
+from core.utils import get_bike_categories, get_material_group
 
 
-def _recreate_index(es, name, settings, mapping):
+def create_index(es: Elasticsearch, name: str, mapping: dict, settings: dict | None = None):
     if es.indices.exists(index=name):
         es.indices.delete(index=name)
-    es.indices.create(index=name, body={"settings": settings, "mappings": mapping["mappings"]})
+        logger.info(f"✅ Deleted index: {name}")
+    es.indices.create(index=name, body={"settings": settings or {}, "mappings": mapping["mappings"]})
     logger.info(f"✅ Recreated index: {name}")
 
 
-def create_index(es, index_name: str = FRAMESET_GEOMETRY_INDEX):
-    _recreate_index(es, index_name, BIKE_GEOMETRY_INDEX_SETTINGS, BIKE_PRODUCT_INDEX_MAPPING)
-
-
-def create_group_index(es, index_name: str = BIKE_PRODUCT_INDEX):
-    mapping = {
-        "mappings": {
-            "properties": {
-                "id": {"type": "integer"},
-                "definition": {
-                    "properties": {
-                        "brand_name": {"type": "keyword"},
-                        "model_name": {
-                            "type": "text",
-                            "fields": {"keyword": {"type": "keyword"}},
-                        },
-                        "category": {"type": "keyword"},
-                        "material": {"type": "keyword"},
-                        "material_group": {"type": "keyword"},
-                    }
-                },
-                # Enabled keyword indexing for sizes to allow filtering
-                "sizes": {"type": "keyword"},
-            }
-        }
-    }
-    _recreate_index(es, index_name, {}, mapping)
-
-
 def serialize_spec(spec: GeometrySpecORM) -> dict:
-    definition = spec.definition
-    # Note: Using .brand_name/model_name directly from your ORM structure
     return {
-        "_index": FRAMESET_GEOMETRY_INDEX,
+        "_index": GEOMETRY_INDEX_NAME,
         "_id": f"spec_{spec.id}",
         "_source": {
             "id": spec.id,
@@ -100,11 +36,10 @@ def serialize_spec(spec: GeometrySpecORM) -> dict:
                 "reach_mm": int(spec.reach_mm),
             },
             "definition": {
-                "brand_name": definition.brand_name,
-                "model_name": definition.model_name,
-                "category": get_bike_categories(definition.category),
-                "material": definition.material,
-                "material_group": get_material_group(definition.material),
+                "brand_name": spec.definition.brand_name,
+                "model_name": spec.definition.model_name,
+                "category": get_bike_categories(spec.definition.category),
+                "material": get_material_group(spec.definition.material),
             },
         },
     }
@@ -112,7 +47,7 @@ def serialize_spec(spec: GeometrySpecORM) -> dict:
 
 def serialize_definition(definition: BikeDefinitionORM) -> dict:
     return {
-        "_index": BIKE_PRODUCT_INDEX,
+        "_index": BIKE_INDEX_NAME,
         "_id": f"def_{definition.id}",
         "_source": {
             "id": definition.id,
@@ -120,8 +55,7 @@ def serialize_definition(definition: BikeDefinitionORM) -> dict:
                 "brand_name": definition.brand_name,
                 "category": get_bike_categories(definition.category),
                 "model_name": definition.model_name,
-                "material": definition.material,
-                "material_group": get_material_group(definition.material),
+                "material": get_material_group(definition.material),
             },
             "sizes": [s.size_label for s in definition.geometries],
         },
@@ -142,47 +76,20 @@ def populate_index(es, session):
     logger.info(f"🧱 Found {len(definitions)} bike definitions.")
 
     def actions_generator():
-        # Index individual geometry specs (for Fit Search)
         for spec in specs:
             yield serialize_spec(spec)
+            print(".", end="")
 
-        # Index high-level bike definitions (for Catalog Search)
         for definition in definitions:
             yield serialize_definition(definition)
+            print(".", end="")
+        print()
 
     logger.info("🚀 Pushing to Elasticsearch...")
-    # chunk_size helps keep the request payload manageable
     success, failed = helpers.bulk(es, actions_generator(), chunk_size=500, stats_only=True)
 
     logger.success(f"🏁 Done! Successfully indexed: {success}, Failed: {failed}")
     return success, failed
-
-
-def main():
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Populate Elasticsearch index with bike data.")
-    parser.add_argument("--url", type=str, default=es_settings.url, help="Elasticsearch URL")
-    parser.add_argument("--index", type=str, default=FRAMESET_GEOMETRY_INDEX, help="Elasticsearch index name")
-    parser.add_argument("--recreate", action="store_true", default=False, help="Recreate index if it exists")
-
-    args = parser.parse_args()
-    es = Elasticsearch(args.url)
-
-    if not es.ping():
-        logger.error(f"❌ Connection failed: {args.url}")
-        exit(1)
-
-    if args.recreate:
-        # We pass 'es' to these, they handle their own internal mapping definitions
-        create_index(es, FRAMESET_GEOMETRY_INDEX)
-        create_group_index(es, BIKE_PRODUCT_INDEX)
-
-    with SessionLocal() as session:
-        try:
-            populate_index(es, session)
-        except Exception as e:
-            logger.exception(f"🚨 Population failed: {e}")
 
 
 if __name__ == "__main__":
@@ -192,8 +99,8 @@ if __name__ == "__main__":
         logger.error(f"❌ Connection failed: {es_settings.url}")
         exit(1)
 
-    create_index(es, FRAMESET_GEOMETRY_INDEX)
-    create_group_index(es, BIKE_PRODUCT_INDEX)
+    create_index(es, BIKE_INDEX_NAME, BIKE_INDEX_MAPPING)
+    create_index(es, GEOMETRY_INDEX_NAME, GEOMETRY_INDEX_MAPPING, GEOMETRY_INDEX_SETTINGS)
 
     with SessionLocal() as session:
         try:

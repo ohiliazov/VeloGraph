@@ -3,11 +3,11 @@ from pathlib import Path
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from backend.api.schemas import BikeDefinitionSchema, GeometrySpecSchema
-from backend.core.db import SessionLocal
-from backend.core.models import BikeDefinitionORM, GeometrySpecORM
-from backend.scripts.constants import artifacts_dir
-from backend.scripts.schemas import ExtractedData
+from api.schemas import BikeDefinitionSchema, GeometrySpecSchema
+from core.db import SessionLocal
+from core.models import BikeDefinitionORM, GeometrySpecORM
+from scripts.constants import artifacts_dir
+from scripts.schemas import ExtractedData
 
 
 class Populator:
