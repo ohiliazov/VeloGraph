@@ -2,62 +2,29 @@ import re
 import shutil
 import zipfile
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import ClassVar
 
 from loguru import logger
-from pydantic import BaseModel, Field
 from selectolax.lexbor import LexborHTMLParser
 
+from backend.api.schemas import BikeDefinitionSchema, GeometrySpecBaseSchema
 from backend.scripts.constants import artifacts_dir
+from backend.scripts.schemas import ExtractedData
 from backend.utils.helpers import extract_number
 
 
-class BuildKit(BaseModel):
-    name: str
-    groupset: str | None = None
-    wheelset: str | None = None
-    cockpit: str | None = None
-    tires: str | None = None
-
-
-class ColorVariant(BaseModel):
-    html_path: str
-    color: str
-    url: str
-
-
-class BikeMeta(BaseModel):
-    brand: str
-    model: str
-    frame_name: str | None = None
-    categories: list[str] = Field(default_factory=list)
-    model_year: int | None = None
-    wheel_size: str | None = None
-    max_tire_width: float | str | None = None
-    material: str | None = None
-    source_url: str = ""
-    colors: list[ColorVariant] = Field(default_factory=list)
-
-
-class ExtractedBikeData(BaseModel):
-    meta: BikeMeta
-    build_kit: BuildKit
-    sizes: list[str]
-    specs: dict[str, list[float | int | str | None]]
-
-
 class KrossBikeExtractor:
-    GEO_MAP: ClassVar[dict[str, list[str]]] = {
-        "stack": ["Stack"],
-        "reach": ["Reach"],
-        "TT": ["TT - efektywna długość górnej rury"],
-        "ST": ["ST - Długość rury podsiodłowej"],
-        "HT": ["HT - Długość główki ramy"],
-        "CS": ["CS - Długość tylnych widełek"],
-        "HA": ["HA - Kąt główki ramy"],
-        "SA": ["SA - Kąt rury podsiodłowej"],
-        "bb_drop": ["BBDROP"],
-        "WB": ["WB - Baza kół"],
+    GEO_MAP: ClassVar[dict[str, str]] = {
+        "stack_mm": "Stack",
+        "reach_mm": "Reach",
+        "top_tube_effective_mm": "TT - efektywna długość górnej rury",
+        "seat_tube_length_mm": "ST - Długość rury podsiodłowej",
+        "head_tube_length_mm": "HT - Długość główki ramy",
+        "chainstay_length_mm": "CS - Długość tylnych widełek",
+        "head_tube_angle": "HA - Kąt główki ramy",
+        "seat_tube_angle": "SA - Kąt rury podsiodłowej",
+        "bb_drop_mm": "BBDROP",
+        "wheelbase_mm": "WB - Baza kół",
     }
 
     COMPONENT_KEYWORDS: ClassVar[dict[str, set[str]]] = {
@@ -89,8 +56,8 @@ class KrossBikeExtractor:
         "tires": {"opony", "opona"},
     }
 
-    def clean_value(self, value: str) -> str | int | float:
-        """Converts string values to int or float if possible."""
+    def clean_value(self, value: str) -> str | float:
+        """Converts string values to float if possible."""
         if not value:
             return ""
         # Common cleanup
@@ -121,51 +88,14 @@ class KrossBikeExtractor:
         }
         return mapping.get(val_str, val_str)
 
-    def _categorize_component(self, attr_name: str, attr_content: str, components: dict[str, list[str]]):
-        """Categorizes a component attribute into the components dictionary."""
-        attr_lower = attr_name.lower()
-        for cat, keywords in self.COMPONENT_KEYWORDS.items():
-            if any(kw in attr_lower for kw in keywords):
-                if cat == "tires":
-                    components[cat].append(attr_content)
-                elif cat == "wheelset" and "rozmiar" in attr_lower:
-                    continue
-                else:
-                    components[cat].append(f"{attr_name.capitalize()}: {attr_content}")
-                return True
-        return False
-
-    def _assemble_build_kit(self, components: dict[str, list[str]]) -> BuildKit:
-        """Assembles the final BuildKit model from categorized components."""
-        bk_data = {k: " | ".join(dict.fromkeys(v)) if v else None for k, v in components.items()}
-        bk_data["name"] = "Standard Build"
-
-        # Heuristic for BuildKit name
-        groupset = components.get("groupset", [])
-        if groupset:
-            # Look for rear derailleur (Przerzutka tył/tylna)
-            rd = next((s for s in groupset if "Przerzutka tył" in s or "Przerzutka tylna" in s), None)
-            if rd and ": " in rd:
-                rd_val = rd.split(": ", 1)[1]
-                words = rd_val.split()
-                if len(words) >= 2:
-                    name = " ".join(words[:2])
-                    # Special case for Shimano RXXXX
-                    if len(words) >= 3 and words[2].startswith("R"):
-                        name = " ".join(words[:3])
-                    bk_data["name"] = name
-                else:
-                    bk_data["name"] = rd_val
-        return BuildKit(**bk_data)
-
-    def extract_file(self, html_path: Path, additional_data: Any = None) -> ExtractedBikeData | None:
+    def extract_file(self, html_path: Path) -> ExtractedData | None:
         """Extracts data from a single HTML file."""
         if not html_path.exists():
             logger.error(f"❌ File {html_path} not found")
             return None
 
         content = html_path.read_text(encoding="utf-8")
-        return self.extract_bike_data(content, additional_data)
+        return self.extract_bike_data(content)
 
     def finalize_extraction(self, json_dir: Path | None = None):
         """Archives extracted JSONs to a zip file and removes the original folder."""
@@ -191,14 +121,12 @@ class KrossBikeExtractor:
 
     def process_directory(
         self,
-        html_dir: Path | None = None,
-        json_dir: Path | None = None,
+        html_dir: Path,
+        json_dir: Path,
         force: bool = False,
         filename: str | None = None,
     ):
         """Processes HTML files in a directory."""
-        html_dir = html_dir or self.html_dir
-        json_dir = json_dir or self.json_dir
         json_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"📂 Scanning directory: {html_dir}...")
 
@@ -212,38 +140,29 @@ class KrossBikeExtractor:
             html_files = sorted(list(html_dir.glob("*.html")))
 
         total = len(html_files)
-        processed_htmls = set()
         files_processed = 0
         skipped_count = 0
 
         for idx, html_path in enumerate(html_files, 1):
-            if html_path.name in processed_htmls:
-                continue
-
             try:
                 logger.info(f"📄 [{idx}/{total}] Processing {html_path.name}...")
-                content = html_path.read_text(encoding="utf-8")
 
+                json_path = json_dir / html_path.with_suffix(".json").name
+                if json_path.exists() and not force:
+                    logger.debug(f"⏭️ Skipping {html_path.name}: JSON already exists")
+                    skipped_count += 1
+                    continue
+
+                content = html_path.read_text(encoding="utf-8")
                 data = self.extract_bike_data(content)
 
                 if data:
-                    for v in data.meta.colors:
-                        processed_htmls.add(v.html_path)
-                    processed_htmls.add(html_path.name)
-
-                    json_path = json_dir / html_path.with_suffix(".json").name
-                    if json_path.exists() and not force:
-                        logger.debug(f"⏭️ Skipping {html_path.name}: JSON already exists")
-                        skipped_count += 1
-                        continue
-
                     json_path.write_text(data.model_dump_json(indent=2), encoding="utf-8")
                     logger.debug(f"✅ Saved JSON: {json_path.name}")
                     files_processed += 1
                 else:
                     logger.warning(f"⚠️ Skipped {html_path.name}: No data extracted")
                     skipped_count += 1
-                    processed_htmls.add(html_path.name)
             except Exception:
                 logger.exception(f"🚨 Error processing {html_path.name}")
                 skipped_count += 1
@@ -302,20 +221,6 @@ class KrossBikeExtractor:
                     return int(c)
         return None
 
-    def _parse_colors(self, parser: LexborHTMLParser) -> list[ColorVariant]:
-        out: list[ColorVariant] = []
-        related_colors_div = parser.css_first("div.product-related-colors")
-        if related_colors_div:
-            for color_div in related_colors_div.css("div.product-item-colors"):
-                a_tag = color_div.css_first("a.variant-item")
-                if a_tag:
-                    v_url = a_tag.attributes.get("href", "").strip()
-                    v_color = a_tag.attributes.get("title", "").strip()
-                    v_url_path = v_url.split("?")[0].rstrip("/")
-                    v_html_name = v_url_path.split("/")[-1] + ".html"
-                    out.append(ColorVariant(html_path=v_html_name, color=v_color, url=v_url))
-        return out
-
     def _parse_material(self, parser: LexborHTMLParser) -> str | None:
         spec_tables = parser.css("table.additional-attributes-table")
         for table in spec_tables:
@@ -330,167 +235,110 @@ class KrossBikeExtractor:
                     return attr_content
         return None
 
-    def _parse_wheel_size(self, parser: LexborHTMLParser) -> str | None:
-        spec_tables = parser.css("table.additional-attributes-table")
-        for table in spec_tables:
-            for row in table.css("tr"):
-                title_cell = row.css_first("td.box-title")
-                content_cell = row.css_first("td.box-content")
-                if not (title_cell and content_cell):
-                    continue
-                attr_name = title_cell.text(strip=True)
-                attr_content = content_cell.text(strip=True)
-                if "opony" in attr_name.lower():
-                    match = re.search(r"(\d{3})x|(\d{2}[.,]\d)\"|(\d{2})\"", attr_content, re.IGNORECASE)
-                    if match:
-                        val = match.group(1) or match.group(2) or match.group(3)
-                        return self.normalize_wheel_size(val)
-        return None
-
-    def _parse_max_tire_width(self, parser: LexborHTMLParser) -> float | str | None:
-        spec_tables = parser.css("table.additional-attributes-table")
-        for table in spec_tables:
-            for row in table.css("tr"):
-                title_cell = row.css_first("td.box-title")
-                content_cell = row.css_first("td.box-content")
-                if not (title_cell and content_cell):
-                    continue
-                attr_name = title_cell.text(strip=True)
-                attr_content = content_cell.text(strip=True)
-                if "maksymalna szerokość opony" in attr_name.lower():
-                    return self.clean_value(attr_content)
-        return None
-
-    def _extract_meta(self, parser: LexborHTMLParser) -> BikeMeta:
-        return BikeMeta(
-            brand=self._parse_brand(),
-            model=self._parse_model(parser),
-            categories=self._parse_categories(parser),
-            model_year=self._parse_model_year(parser),
-            wheel_size=self._parse_wheel_size(parser),
-            max_tire_width=self._parse_max_tire_width(parser),
-            material=self._parse_material(parser),
-            source_url=self._parse_source_url(parser),
-            colors=self._parse_colors(parser),
-        )
-
-    def extract_bike_data(self, html: str) -> ExtractedBikeData | None:
+    def extract_bike_data(self, html: str) -> ExtractedData | None:
         """Parses Kross bike HTML."""
         parser = LexborHTMLParser(html)
 
-        # --- Meta via dedicated field parsers ---
-        bike_meta = self._extract_meta(parser)
-        components = {k: [] for k in self.COMPONENT_KEYWORDS}
+        model_name = self._parse_model(parser)
+        category = ", ".join(categories) if (categories := self._parse_categories(parser)) else ""
+        model_year = self._parse_model_year(parser)
+        material = self._parse_material(parser)
+        bike_definition = BikeDefinitionSchema(
+            brand_name="Kross",
+            model_name=model_name,
+            category=category,
+            year_start=model_year,
+            year_end=model_year,
+            material=material,
+        )
 
-        # --- 1. Extract from Additional Attributes (Specyfikacja) ---
-        spec_tables = parser.css("table.additional-attributes-table")
-        for table in spec_tables:
-            for row in table.css("tr"):
-                title_cell = row.css_first("td.box-title")
-                content_cell = row.css_first("td.box-content")
-                if not (title_cell and content_cell):
-                    continue
+        geometries = self._parse_geometry(parser)
+        if not geometries:
+            return None
 
-                attr_name = title_cell.text(strip=True)
-                attr_content = content_cell.text(strip=True)
+        return ExtractedData(
+            bike_definition=bike_definition,
+            geometries=geometries,
+        )
 
-                # BuildKit components only (metadata handled by dedicated parsers)
-                self._categorize_component(attr_name, attr_content, components)
-
-        # --- 2. Geometry: handled by a single function ---
+    def _parse_geometry(self, parser: LexborHTMLParser) -> list[GeometrySpecBaseSchema]:
+        """Extracts geometry specs from HTML table."""
         target_table = None
         for table in parser.css("table"):
             thead = table.css_first("thead")
-            if thead:
-                th = thead.css_first("th")
-                if th and "Rozmiar" in th.text():
-                    target_table = table
-                    break
+            if thead and (th := thead.css_first("th")) and "Rozmiar" in th.text():
+                target_table = table
+                break
 
         if not target_table:
-            return None
+            return []
 
-        # Extract sizes and specs from geometry table
-        bike_sizes: list[str] = []
-        bike_specs: dict[str, list[float | int | str | None]] = {}
-
-        thead = target_table.css_first("thead")
-        header_row = thead.css_first("tr") if thead else None
+        header_row = target_table.css_first("thead tr")
         if not header_row:
-            return None
+            return []
+        sizes = [th.text(strip=True) for th in header_row.css("th")[1:]]
 
-        for th in header_row.css("th")[1:]:
-            size_text = th.text(strip=True)
-            bike_sizes.append(size_text)
-
-            # Wheel size from header if missing
-            if not bike_meta.wheel_size:
-                matches = [m.group(1) or m.group(2) for m in re.finditer(r"(\d{2}[.,]\d)\"|(\d{2})\"", size_text)]
-                if matches:
-                    val = matches[-1] if len(matches) > 1 else (matches[0] if "(" not in size_text else None)
-                    if val:
-                        bike_meta.wheel_size = self.normalize_wheel_size(val)
+        # We'll build a list of dicts, one for each size
+        geo_data_list = [{"size_label": size} for size in sizes]
 
         tbody = target_table.css_first("tbody")
-        if tbody:
-            for row in tbody.css("tr"):
-                cells = row.css("td")
-                if not cells:
-                    continue
-                attr_name = cells[0].text(strip=True)
+        if not tbody:
+            return []
 
-                mapped_key = None
-                attr_lower = attr_name.lower()
-                for internal_key, labels in self.GEO_MAP.items():
-                    if any(label.lower() in attr_lower for label in labels):
-                        mapped_key = internal_key
-                        break
-                if not mapped_key:
-                    mapped_key = attr_name
-
-                values = [self.clean_value(cell.text(strip=True)) for cell in cells[1:]]
-                values.extend([None] * (len(bike_sizes) - len(values)))
-                bike_specs[mapped_key] = values
-
-        # Wheel size from geometry row if still missing
-        if not bike_meta.wheel_size:
-            for attr, vals in bike_specs.items():
-                if "rozmiar kół" in attr.lower():
-                    for v in (v for v in vals if v):
-                        match = re.search(r"(\d{3})|(\d{2}[.,]\d)|(\d{2})", str(v))
-                        if match:
-                            bike_meta.wheel_size = self.normalize_wheel_size(match.group(0))
-                            break
-                    if bike_meta.wheel_size:
-                        break
-
-        # Extract additional components from geometry table
-        for attr_name, values in bike_specs.items():
-            if not (values and any(values)):
+        for row in tbody.css("tr"):
+            cells = row.css("td")
+            if not cells:
                 continue
 
-            rep_val = None
-            for v in (v for v in values if v):
-                v_str = str(v)
-                if len(re.sub(r"[0-9.,\s\-\*/°'\"(kg)(mm)(c)]", "", v_str, flags=re.IGNORECASE)) > 2:
-                    rep_val = v_str
+            attr_name = cells[0].text(strip=True).lower()
+            mapped_key = next((k for k, label in self.GEO_MAP.items() if label.lower() in attr_name), None)
+
+            if not mapped_key:
+                continue
+
+            for i, cell in enumerate(cells[1:]):
+                if i >= len(geo_data_list):
                     break
+                val_text = cell.text(strip=True)
+                if not val_text:
+                    continue
 
-            if rep_val:
-                self._categorize_component(attr_name, rep_val, components)
+                try:
+                    num = extract_number(val_text)
+                    geo_data_list[i][mapped_key] = float(num) if "angle" in mapped_key else round(num)
+                except ValueError, TypeError:
+                    continue
 
-        return ExtractedBikeData(
-            meta=bike_meta,
-            build_kit=self._assemble_build_kit(components),
-            sizes=bike_sizes,
-            specs={k: v for k, v in bike_specs.items() if k in self.GEO_MAP},
-        )
+        geometries = []
+        required_keys = {
+            "stack_mm",
+            "reach_mm",
+            "head_tube_angle",
+            "seat_tube_angle",
+            "chainstay_length_mm",
+            "wheelbase_mm",
+            "bb_drop_mm",
+        }
+        for data in geo_data_list:
+            if all(k in data for k in required_keys):
+                try:
+                    geometries.append(GeometrySpecBaseSchema(**data))
+                except Exception as e:
+                    logger.error(f"Validation failed for size {data.get('size_label')}: {e}")
+
+        return geometries
 
 
 if __name__ == "__main__":
+    raw_htmls_dir = artifacts_dir / "kross" / "raw_htmls"
+    extracted_json_dir = artifacts_dir / "kross" / "extracted"
+
+    shutil.rmtree(extracted_json_dir, ignore_errors=True)
+    extracted_json_dir.mkdir(parents=True, exist_ok=True)
+
     extractor = KrossBikeExtractor()
     extractor.process_directory(
-        artifacts_dir / "kross" / "raw_htmls",
-        artifacts_dir / "kross" / "exctracted_jsons",
+        raw_htmls_dir,
+        extracted_json_dir,
         force=True,
     )

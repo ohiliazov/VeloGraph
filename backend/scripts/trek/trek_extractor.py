@@ -153,7 +153,13 @@ class TrekBikeExtractor:
             geometries=geometries,
         )
 
-        self.output_json_path.write_text(extracted_data.model_dump_json(indent=2, exclude_none=True))
+        self.output_json_path.write_text(
+            extracted_data.model_dump_json(
+                indent=2,
+                exclude_none=True,
+                exclude_unset=True,
+            )
+        )
 
         return extracted_data
 
