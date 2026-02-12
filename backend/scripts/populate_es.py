@@ -187,19 +187,22 @@ def main():
     parser.add_argument("--recreate", action="store_true", default=False, help="Recreate index if it exists")
 
     args = parser.parse_args()
-
     es = Elasticsearch(args.url)
 
     if not es.ping():
-        logger.error(f"❌ Could not connect to Elasticsearch at {args.url}!")
-        return
+        logger.error(f"❌ Connection failed: {args.url}")
+        exit(1)
 
     if args.recreate:
+        # We pass 'es' to these, they handle their own internal mapping definitions
         create_index(es, FRAMESET_GEOMETRY_INDEX)
         create_group_index(es, BIKE_PRODUCT_INDEX)
 
     with SessionLocal() as session:
-        populate_index(es, session)
+        try:
+            populate_index(es, session)
+        except Exception as e:
+            logger.exception(f"🚨 Population failed: {e}")
 
 
 if __name__ == "__main__":
