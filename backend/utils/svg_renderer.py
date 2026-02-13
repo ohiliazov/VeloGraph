@@ -5,7 +5,6 @@ from dataclasses import dataclass
 import svgwrite
 
 # --- Constants ---
-
 DEFAULT_JOINTS = {
     "topToSeatDrop": 0.08,
     "topToHeadDrop": 0.07,
@@ -57,12 +56,10 @@ COLOR_MAP: dict[str, str] = {
     "brown": "#92400e",
     "navy": "#1e3a8a",
     "teal": "#0d9488",
-    # Add other PL/EN mappings as needed
 }
 
+
 # --- Types ---
-
-
 @dataclass
 class GeometrySpec:
     stack_mm: float
@@ -70,15 +67,13 @@ class GeometrySpec:
     bb_drop_mm: float
     chainstay_length_mm: float
     wheelbase_mm: float
-    seat_tube_length_mm: float | None = None
-    seat_tube_angle: float | None = None
-    head_tube_length_mm: float | None = None
-    head_tube_angle: float | None = None
+    seat_tube_length_mm: float
+    seat_tube_angle: float
+    head_tube_length_mm: float
+    head_tube_angle: float
 
 
 # --- Helpers ---
-
-
 def normalize_color(input_str: str | None) -> str:
     if not input_str:
         return DEFAULT_FRAME_COLOR
@@ -100,6 +95,24 @@ def normalize_color(input_str: str | None) -> str:
     return s
 
 
+# Vector helpers
+def sub(a, b):
+    return a[0] - b[0], a[1] - b[1]
+
+
+def add(a, b):
+    return a[0] + b[0], a[1] + b[1]
+
+
+def mul(v, s):
+    return v[0] * s, v[1] * s
+
+
+def norm(v):
+    hypot = math.hypot(v[0], v[1]) or 1
+    return v[0] / hypot, v[1] / hypot
+
+
 def generate_bike_svg(
     geometry: GeometrySpec,
     wheel_size: str | None = None,
@@ -110,17 +123,16 @@ def generate_bike_svg(
     frame_color: str | None = None,
     joint_adjustments: dict[str, float] | None = None,
 ) -> str:
-    # 1. Inputs & Defaults
+    # 1. Inputs
     stack = geometry.stack_mm
     reach = geometry.reach_mm
     bb_drop = geometry.bb_drop_mm
     chainstay = geometry.chainstay_length_mm
     wheelbase = geometry.wheelbase_mm
-
-    seat_tube = geometry.seat_tube_length_mm or 500
-    seat_angle = geometry.seat_tube_angle or 73.0
-    head_tube = geometry.head_tube_length_mm or 150
-    head_angle = geometry.head_tube_angle or 73.0
+    seat_tube = geometry.seat_tube_length_mm
+    seat_angle = geometry.seat_tube_angle
+    head_tube = geometry.head_tube_length_mm
+    head_angle = geometry.head_tube_angle
 
     wheel_diameter = WHEEL_SIZE_MAP.get(str(wheel_size), DEFAULT_WHEEL_DIAMETER_MM)
     tire_width = float(max_tire_width) if max_tire_width else DEFAULT_TIRE_WIDTH_MM
@@ -202,26 +214,12 @@ def generate_bike_svg(
     ty = MARGIN_PX + offset_y + max_y * current_scale
 
     def to_svg(pt: tuple[float, float]) -> tuple[float, float]:
-        return (tx + pt[0] * current_scale, ty - pt[1] * current_scale)
+        return tx + pt[0] * current_scale, ty - pt[1] * current_scale
 
     # 5. Joint Math
     J = DEFAULT_JOINTS.copy()
     if joint_adjustments:
         J.update(joint_adjustments)
-
-    # Vector helpers
-    def sub(a, b):
-        return (a[0] - b[0], a[1] - b[1])
-
-    def add(a, b):
-        return (a[0] + b[0], a[1] + b[1])
-
-    def mul(v, s):
-        return (v[0] * s, v[1] * s)
-
-    def norm(v):
-        L = math.hypot(v[0], v[1]) or 1
-        return (v[0] / L, v[1] / L)
 
     u_seat = norm(sub(points["seat_top"], points["bb"]))
     u_head = norm(sub(points["head_top"], points["head_bottom"]))
