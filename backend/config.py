@@ -23,6 +23,10 @@ class PostgresSettings(BaseSettings):
 
     @property
     def connection_string(self):
+        return f"postgresql+psycopg2://{self.user}:{self.password.get_secret_value()}@{self.host}:{self.port}/{self.db}"
+
+    @property
+    def async_connection_string(self):
         return f"postgresql+asyncpg://{self.user}:{self.password.get_secret_value()}@{self.host}:{self.port}/{self.db}"
 
 
