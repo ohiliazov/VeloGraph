@@ -143,7 +143,7 @@ async def search_keyword(
     if q:
         sort.append("_score")
     else:
-        sort.append({"definition.brand_name.keyword": "asc"})
+        sort.append({"definition.brand_name": "asc"})
 
     query = {"bool": {"must": must, "filter": filters}}
     from_ = (page - 1) * size

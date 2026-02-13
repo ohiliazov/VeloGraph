@@ -5,7 +5,7 @@ from config import es_settings
 BIKE_INDEX_NAME = "bikes"
 GEOMETRY_INDEX_NAME = "geometries"
 
-BIKE_INDEX_MAPPING = {
+BIKE_INDEX_BODY = {
     "mappings": {
         "properties": {
             "id": {"type": "integer"},
@@ -26,19 +26,18 @@ BIKE_INDEX_MAPPING = {
     }
 }
 
-GEOMETRY_INDEX_SETTINGS = {
-    "analysis": {
-        "analyzer": {
-            "bike_name_analyzer": {
-                "type": "custom",
-                "tokenizer": "standard",
-                "filter": ["lowercase", "asciifolding"],
+GEOMETRY_INDEX_BODY = {
+    "settings": {
+        "analysis": {
+            "analyzer": {
+                "bike_name_analyzer": {
+                    "type": "custom",
+                    "tokenizer": "standard",
+                    "filter": ["lowercase", "asciifolding"],
+                }
             }
         }
-    }
-}
-
-GEOMETRY_INDEX_MAPPING = {
+    },
     "mappings": {
         "properties": {
             "id": {"type": "integer"},
@@ -63,9 +62,8 @@ GEOMETRY_INDEX_MAPPING = {
                 }
             },
         }
-    }
+    },
 }
-
 
 es_client = AsyncElasticsearch(
     hosts=[es_settings.url],
