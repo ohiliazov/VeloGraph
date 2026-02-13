@@ -3,7 +3,8 @@ from typing import Annotated
 from elasticsearch import AsyncElasticsearch
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from api.schemas import (
     BikeCategory,
@@ -17,7 +18,7 @@ from api.schemas import (
     SearchResult,
 )
 from core.constants import MaterialGroup
-from core.db import get_db
+from core.db import get_async_db
 from core.elasticsearch import BIKE_INDEX_NAME, GEOMETRY_INDEX_NAME, get_es_client
 from core.models import BikeDefinitionORM, GeometrySpecORM
 from core.utils import get_material_group
@@ -26,33 +27,33 @@ router = APIRouter()
 
 
 @router.get("/definitions", response_model=list[BikeDefinitionSchema])
-def list_definitions(db: Annotated[Session, Depends(get_db)], limit: int = 100):
-    stmt = select(BikeDefinitionORM).limit(limit)
-    return db.scalars(stmt).all()
+async def list_definitions(db: Annotated[AsyncSession, Depends(get_async_db)], limit: int = 100):
+    result = await db.execute(select(BikeDefinitionORM).limit(limit))
+    return result.all()
 
 
 @router.post("/definitions", response_model=BikeDefinitionSchema)
-def create_definition(data: BikeDefinitionCreateSchema, db: Annotated[Session, Depends(get_db)]):
+async def create_definition(data: BikeDefinitionCreateSchema, db: Annotated[AsyncSession, Depends(get_async_db)]):
     new_def = BikeDefinitionORM(**data.model_dump())
     db.add(new_def)
-    db.commit()
-    db.refresh(new_def)
+    await db.commit()
+    await db.refresh(new_def)
     return new_def
 
 
 @router.post("/geometry-specs", response_model=GeometrySpecSchema)
-def create_geometry_spec(data: GeometrySpecCreateSchema, db: Annotated[Session, Depends(get_db)]):
+async def create_geometry_spec(data: GeometrySpecCreateSchema, db: Annotated[AsyncSession, Depends(get_async_db)]):
     new_spec = GeometrySpecORM(**data.model_dump())
     db.add(new_spec)
-    db.commit()
-    db.refresh(new_spec)
+    await db.commit()
+    await db.refresh(new_spec)
     return new_spec
 
 
 @router.get("/search/geometry", response_model=SearchResult)
 async def search_geometry(
     es: Annotated[AsyncElasticsearch, Depends(get_es_client)],
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_async_db)],
     stack: Annotated[int, Query(description="Target stack in mm")],
     reach: Annotated[int, Query(description="Target reach in mm")],
     page: Annotated[int, Query(ge=1)] = 1,
@@ -94,14 +95,14 @@ async def search_geometry(
     if not spec_ids:
         return {"total": total, "items": []}
 
-    stmt = (
+    result = await db.scalars(
         select(GeometrySpecORM)
         .where(GeometrySpecORM.id.in_(spec_ids))
         .options(
             selectinload(GeometrySpecORM.definition),
         )
     )
-    specs = db.scalars(stmt).all()
+    specs = result.all()
     spec_map = {s.id: s for s in specs}
     sorted_specs = [spec_map[sid] for sid in spec_ids if sid in spec_map]
 
@@ -111,7 +112,7 @@ async def search_geometry(
 @router.get("/search/keyword", response_model=GroupedSearchResult)
 async def search_keyword(
     es: Annotated[AsyncElasticsearch, Depends(get_es_client)],
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_async_db)],
     q: Annotated[str | None, Query(description="Search by brand or model")] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     size: Annotated[int, Query(ge=1, le=100)] = 10,
@@ -156,14 +157,14 @@ async def search_keyword(
     if not def_ids:
         return {"total": total, "items": []}
 
-    stmt = (
+    result = await db.scalars(
         select(BikeDefinitionORM)
         .where(BikeDefinitionORM.id.in_(def_ids))
         .options(
             selectinload(BikeDefinitionORM.geometries),
         )
     )
-    definitions = db.scalars(stmt).all()
+    definitions = result.all()
     def_map = {d.id: d for d in definitions}
     sorted_defs = [def_map[sid] for sid in def_ids if sid in def_map]
 
@@ -171,15 +172,14 @@ async def search_keyword(
 
 
 @router.get("/definitions/{def_id}", response_model=BikeDefinitionExtendedSchema)
-def get_bike_definition(def_id: int, db: Annotated[Session, Depends(get_db)]):
-    stmt = (
+async def get_bike_definition(def_id: int, db: Annotated[AsyncSession, Depends(get_async_db)]):
+    definition = await db.scalar(
         select(BikeDefinitionORM)
         .where(BikeDefinitionORM.id == def_id)
         .options(
             selectinload(BikeDefinitionORM.geometries),
         )
     )
-    definition = db.scalar(stmt)
     if not definition:
         raise HTTPException(status_code=404, detail="Bike definition not found")
 
@@ -187,15 +187,14 @@ def get_bike_definition(def_id: int, db: Annotated[Session, Depends(get_db)]):
 
 
 @router.get("/specs/{spec_id}", response_model=GeometrySpecExtendedSchema)
-def get_geometry_spec(spec_id: int, db: Annotated[Session, Depends(get_db)]):
-    stmt = (
+async def get_geometry_spec(spec_id: int, db: Annotated[AsyncSession, Depends(get_async_db)]):
+    spec = await db.scalar(
         select(GeometrySpecORM)
         .where(GeometrySpecORM.id == spec_id)
         .options(
             selectinload(GeometrySpecORM.definition),
         )
     )
-    spec = db.scalar(stmt)
     if not spec:
         raise HTTPException(status_code=404, detail="Geometry spec not found")
 
@@ -205,29 +204,26 @@ def get_geometry_spec(spec_id: int, db: Annotated[Session, Depends(get_db)]):
 @router.delete("/specs/{spec_id}")
 async def delete_geometry_spec(
     spec_id: int,
-    db: Annotated[Session, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_async_db)],
     es: Annotated[AsyncElasticsearch, Depends(get_es_client)],
 ):
-    stmt = select(GeometrySpecORM).where(GeometrySpecORM.id == spec_id)
-    spec = db.scalar(stmt)
+    spec = await db.scalar(select(GeometrySpecORM).where(GeometrySpecORM.id == spec_id))
     if not spec:
         raise HTTPException(status_code=404, detail="Geometry spec not found")
 
-    def_id = spec.definition_id
-    db.delete(spec)
-    db.commit()
+    await db.delete(spec)
+    await db.commit()
 
     await es.delete(index=GEOMETRY_INDEX_NAME, id=str(spec_id), ignore=[404], refresh=True)
 
-    # Re-sync parent definition to BIKE_PRODUCT_INDEX
-    stmt = (
+    def_id = spec.definition_id
+    definition = await db.scalar(
         select(BikeDefinitionORM)
         .where(BikeDefinitionORM.id == def_id)
         .options(
             selectinload(BikeDefinitionORM.geometries),
         )
     )
-    definition = db.scalar(stmt)
     if not definition or not definition.geometries:
         await es.delete(index=BIKE_INDEX_NAME, id=str(def_id), ignore=[404], refresh=True)
     else:

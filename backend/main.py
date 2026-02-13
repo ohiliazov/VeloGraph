@@ -8,10 +8,10 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.routes import bikes
-from core.db import get_db
+from core.db import get_async_db
 from core.elasticsearch import get_es_client
 from utils.logging import InterceptHandler
 
@@ -87,7 +87,7 @@ async def root():
 
 @app.get("/health", tags=["health"])
 async def health_check(
-    db: Annotated[Session, Depends(get_db)], es: Annotated[AsyncElasticsearch, Depends(get_es_client)]
+    db: Annotated[AsyncSession, Depends(get_async_db)], es: Annotated[AsyncElasticsearch, Depends(get_es_client)]
 ):
     """
     Check if the API, Database, and Elasticsearch are responsive.
@@ -96,7 +96,7 @@ async def health_check(
     errors = []
 
     try:
-        db.execute(text("SELECT 1"))
+        await db.execute(text("SELECT 1"))
         health_status["services"]["database"] = "reachable"
     except Exception as e:
         logger.error(f"Database health check failed: {e}")

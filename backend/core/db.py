@@ -2,13 +2,16 @@ import argparse
 
 from loguru import logger
 from sqlalchemy import create_engine, exc
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from config import pg_settings
 from core.models import Base
 
 engine = create_engine(pg_settings.connection_string)
+async_engine = create_async_engine(pg_settings.connection_string)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+AsyncSessionLocal = async_sessionmaker(autocommit=False, autoflush=False, bind=async_engine)
 
 
 def init_db(drop_all: bool = False):
@@ -30,8 +33,8 @@ def init_db(drop_all: bool = False):
         raise
 
 
-def get_db():
-    db = SessionLocal()
+def get_async_db():
+    db = AsyncSessionLocal()
     try:
         yield db
     finally:
