@@ -5,7 +5,6 @@ from dataclasses import dataclass
 import svgwrite
 
 # --- Constants ---
-
 DEFAULT_JOINTS = {
     "topToSeatDrop": 0.08,
     "topToHeadDrop": 0.07,
@@ -57,12 +56,10 @@ COLOR_MAP: dict[str, str] = {
     "brown": "#92400e",
     "navy": "#1e3a8a",
     "teal": "#0d9488",
-    # Add other PL/EN mappings as needed
 }
 
+
 # --- Types ---
-
-
 @dataclass
 class GeometrySpec:
     stack_mm: float
@@ -77,8 +74,6 @@ class GeometrySpec:
 
 
 # --- Helpers ---
-
-
 def normalize_color(input_str: str | None) -> str:
     if not input_str:
         return DEFAULT_FRAME_COLOR
@@ -98,6 +93,24 @@ def normalize_color(input_str: str | None) -> str:
             return COLOR_MAP[tok]
 
     return s
+
+
+# Vector helpers
+def sub(a, b):
+    return a[0] - b[0], a[1] - b[1]
+
+
+def add(a, b):
+    return a[0] + b[0], a[1] + b[1]
+
+
+def mul(v, s):
+    return v[0] * s, v[1] * s
+
+
+def norm(v):
+    hypot = math.hypot(v[0], v[1]) or 1
+    return v[0] / hypot, v[1] / hypot
 
 
 def generate_bike_svg(
@@ -202,26 +215,12 @@ def generate_bike_svg(
     ty = MARGIN_PX + offset_y + max_y * current_scale
 
     def to_svg(pt: tuple[float, float]) -> tuple[float, float]:
-        return (tx + pt[0] * current_scale, ty - pt[1] * current_scale)
+        return tx + pt[0] * current_scale, ty - pt[1] * current_scale
 
     # 5. Joint Math
     J = DEFAULT_JOINTS.copy()
     if joint_adjustments:
         J.update(joint_adjustments)
-
-    # Vector helpers
-    def sub(a, b):
-        return (a[0] - b[0], a[1] - b[1])
-
-    def add(a, b):
-        return (a[0] + b[0], a[1] + b[1])
-
-    def mul(v, s):
-        return (v[0] * s, v[1] * s)
-
-    def norm(v):
-        L = math.hypot(v[0], v[1]) or 1
-        return (v[0] / L, v[1] / L)
 
     u_seat = norm(sub(points["seat_top"], points["bb"]))
     u_head = norm(sub(points["head_top"], points["head_bottom"]))
