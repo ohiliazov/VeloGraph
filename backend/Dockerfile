@@ -36,8 +36,11 @@ COPY --from=builder "$VIRTUAL_ENV" "$VIRTUAL_ENV"
 COPY . .
 RUN chmod +x docker_entrypoint.sh
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').getcode()" || exit 1
+
 ENTRYPOINT ["./docker_entrypoint.sh"]
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--no-access-log"]
 
 # -------- Production stage --------
 FROM base AS prod
@@ -58,5 +61,8 @@ RUN chmod +x docker_entrypoint.sh
 
 USER appuser
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').getcode()" || exit 1
+
 ENTRYPOINT ["./docker_entrypoint.sh"]
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]

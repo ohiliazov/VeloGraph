@@ -141,7 +141,8 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - backend-dev
+      backend-dev:
+        condition: service_healthy
     networks:
       - velograph_net
 
