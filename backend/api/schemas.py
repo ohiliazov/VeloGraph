@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from core.constants import BikeCategory, MaterialGroup
 from core.utils import get_bike_categories, get_material_group
@@ -15,7 +15,7 @@ class BikeDefinitionSchema(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    simple_categories: list[BikeCategory] = []
+    simple_categories: list[BikeCategory] = Field(default_factory=list)
     simple_material: MaterialGroup | None = None
 
     @model_validator(mode="after")
@@ -54,7 +54,7 @@ class GeometrySpecCreateSchema(GeometrySpecSchema):
 
 
 class BikeDefinitionExtendedSchema(BikeDefinitionSchema):
-    geometries: list[GeometrySpecSchema] = []
+    geometries: list[GeometrySpecSchema] = Field(default_factory=list)
 
 
 class BikeDefinitionCreateSchema(BaseModel):
@@ -68,9 +68,9 @@ class BikeDefinitionCreateSchema(BaseModel):
 
 class SearchResult(BaseModel):
     total: int
-    items: list[GeometrySpecExtendedSchema] = []
+    items: list[GeometrySpecExtendedSchema] = Field(default_factory=list)
 
 
 class GroupedSearchResult(BaseModel):
     total: int
-    items: list[BikeDefinitionExtendedSchema] = []
+    items: list[BikeDefinitionExtendedSchema] = Field(default_factory=list)
