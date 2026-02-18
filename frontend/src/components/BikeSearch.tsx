@@ -546,7 +546,7 @@ export default function BikeSearch() {
                               {definition?.simple_categories?.map((cat) => (
                                 <span
                                   key={cat}
-                                  className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700"
+                                  className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 uppercase"
                                 >
                                   {cat}
                                 </span>
@@ -554,6 +554,17 @@ export default function BikeSearch() {
                               {definition?.simple_material && (
                                 <span className="text-[10px] font-extrabold text-blue-500 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/30 px-2 py-0.5 rounded-md uppercase tracking-wider border border-blue-100/50 dark:border-blue-900/50">
                                   {definition.simple_material}
+                                </span>
+                              )}
+                              {(definition?.year_start ||
+                                definition?.year_end) && (
+                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
+                                  {definition?.year_end &&
+                                  definition?.year_start &&
+                                  definition.year_end !== definition.year_start
+                                    ? `${definition.year_start}–${definition.year_end}`
+                                    : definition?.year_start ||
+                                      definition?.year_end}
                                 </span>
                               )}
                             </div>
