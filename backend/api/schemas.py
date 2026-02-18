@@ -26,7 +26,7 @@ class BikeDefinitionSchema(BaseModel):
         return self
 
 
-class GeometrySpecBaseSchema(BaseModel):
+class GeometrySpecSchema(BaseModel):
     size_label: str
     stack_mm: int
     reach_mm: int
@@ -45,19 +45,16 @@ class GeometrySpecBaseSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class GeometrySpecSchema(GeometrySpecBaseSchema):
-    id: int
-    definition_id: int
+class GeometrySpecExtendedSchema(GeometrySpecSchema):
+    definition: BikeDefinitionSchema
 
-    model_config = ConfigDict(from_attributes=True)
+
+class GeometrySpecCreateSchema(GeometrySpecSchema):
+    definition_id: int
 
 
 class BikeDefinitionExtendedSchema(BikeDefinitionSchema):
     geometries: list[GeometrySpecSchema] = []
-
-
-class GeometrySpecExtendedSchema(GeometrySpecSchema):
-    definition: BikeDefinitionSchema
 
 
 class BikeDefinitionCreateSchema(BaseModel):
@@ -67,24 +64,6 @@ class BikeDefinitionCreateSchema(BaseModel):
     year_start: int | None = None
     year_end: int | None = None
     material: str | None = None
-
-
-class GeometrySpecCreateSchema(BaseModel):
-    definition_id: int
-    size_label: str
-    stack_mm: int
-    reach_mm: int
-    top_tube_effective_mm: int | None = None
-    seat_tube_length_mm: int | None = None
-    head_tube_length_mm: int | None = None
-    head_tube_angle: float
-    seat_tube_angle: float
-    chainstay_length_mm: int
-    wheelbase_mm: int
-    bb_drop_mm: int
-    fork_offset_mm: int | None = None
-    trail_mm: int | None = None
-    standover_height_mm: int | None = None
 
 
 class SearchResult(BaseModel):

@@ -4,7 +4,7 @@ from loguru import logger
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from api.schemas import BikeDefinitionSchema, GeometrySpecBaseSchema
+from api.schemas import BikeDefinitionSchema, GeometrySpecSchema
 from core.db import SessionLocal
 from core.models import BikeDefinitionORM, GeometrySpecORM
 from scripts.constants import artifacts_dir
@@ -17,7 +17,7 @@ class Populator:
         self.db = db
         self.brand = brand
 
-    def _geometries_match(self, existing_def: BikeDefinitionORM, new_geometries: list[GeometrySpecBaseSchema]) -> bool:
+    def _geometries_match(self, existing_def: BikeDefinitionORM, new_geometries: list[GeometrySpecSchema]) -> bool:
         """
         Check if the existing bike definition has the same set of geometries as the new ones.
         """
@@ -46,7 +46,7 @@ class Populator:
         return True
 
     def get_or_create_definition(
-        self, bike_def: BikeDefinitionSchema, geometries: list[GeometrySpecBaseSchema]
+        self, bike_def: BikeDefinitionSchema, geometries: list[GeometrySpecSchema]
     ) -> BikeDefinitionORM:
         brand_name = bike_def.brand_name
         base_model_name = bike_def.model_name
@@ -93,7 +93,7 @@ class Populator:
         return bike_definition
 
     def get_or_create_geometry_spec(
-        self, geo_data: GeometrySpecBaseSchema, definition: BikeDefinitionORM, overwrite: bool = False
+        self, geo_data: GeometrySpecSchema, definition: BikeDefinitionORM, overwrite: bool = False
     ) -> GeometrySpecORM:
         stmt = select(GeometrySpecORM).where(
             GeometrySpecORM.definition_id == definition.id,

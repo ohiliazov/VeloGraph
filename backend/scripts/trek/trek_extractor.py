@@ -6,7 +6,7 @@ from pathlib import Path
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from api.schemas import BikeDefinitionSchema, GeometrySpecBaseSchema
+from api.schemas import BikeDefinitionSchema, GeometrySpecSchema
 from scripts.constants import artifacts_dir
 from scripts.schemas import ExtractedData
 
@@ -146,7 +146,7 @@ class TrekBikeExtractor:
 
                 geo_spec[model_key] = val
 
-            geometries.append(GeometrySpecBaseSchema(**geo_spec))
+            geometries.append(GeometrySpecSchema(**geo_spec))
 
         extracted_data = ExtractedData(
             bike_definition=bike_definition,

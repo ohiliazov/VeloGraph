@@ -6,7 +6,7 @@ from loguru import logger
 from pydantic import ValidationError
 from selectolax.lexbor import LexborHTMLParser
 
-from api.schemas import BikeDefinitionSchema, GeometrySpecBaseSchema
+from api.schemas import BikeDefinitionSchema, GeometrySpecSchema
 from scripts.constants import artifacts_dir
 from scripts.schemas import ExtractedData
 from utils.helpers import extract_number
@@ -160,7 +160,7 @@ class KrossBikeExtractor:
             geometries=geometries,
         )
 
-    def _parse_geometry(self, parser: LexborHTMLParser) -> list[GeometrySpecBaseSchema]:
+    def _parse_geometry(self, parser: LexborHTMLParser) -> list[GeometrySpecSchema]:
         """Extracts geometry specs from HTML table."""
         target_table = None
         for table in parser.css("table"):
@@ -212,7 +212,7 @@ class KrossBikeExtractor:
         for data in geo_data_list:
             if all(k in data for k in REQUIRED_GEO_KEYS):
                 try:
-                    geometries.append(GeometrySpecBaseSchema(**data))
+                    geometries.append(GeometrySpecSchema(**data))
                 except Exception as e:
                     logger.error(f"Validation failed for size {data.get('size_label')}: {e}")
 
