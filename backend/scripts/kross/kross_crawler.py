@@ -19,6 +19,7 @@ class KrossBikeCrawler:
     def __init__(self, start_url: str, output_path: Path):
         self.start_url = start_url
         self.output_path = output_path
+        self.same_color_urls = set()
 
     @retry(
         stop=stop_after_attempt(3),
@@ -33,10 +34,17 @@ class KrossBikeCrawler:
 
     def collect_page_urls(self, page) -> set[str]:
         urls: set[str] = set()
-        product_buttons = page.query_selector_all("div.products a.action.secondary")
-        for btn in product_buttons:
-            if href := btn.get_attribute("href"):
-                urls.add(href)
+        block_related_colors_list = page.query_selector_all("div.block-related-color")
+        for block_related_colors in block_related_colors_list:
+            for idx, variant in enumerate(
+                block_related_colors.query_selector_all("div.product-item-colors a.variant-item")
+            ):
+                href = variant.get_attribute("href")
+                if href in self.same_color_urls:
+                    continue
+                if idx == 0:
+                    urls.add(href)
+                self.same_color_urls.add(href)
         return urls
 
     def get_next_page_url(self, page) -> str | None:
@@ -135,9 +143,11 @@ class KrossDownloader:
 
 
 if __name__ == "__main__":
-    crawler = KrossBikeCrawler("https://kross.pl/rowery", artifacts_dir / "kross" / "bike_urls.json")
-    all_bike_urls = crawler.run()
+    bike_urls_path = artifacts_dir / "kross" / "bike_urls.json"
+    raw_htmls_dir = artifacts_dir / "kross" / "raw_htmls"
+    overwrite = False
 
-    for url in all_bike_urls:
-        downloader = KrossDownloader(url, artifacts_dir / "kross" / "raw_htmls", overwrite=False)
+    crawler = KrossBikeCrawler("https://kross.pl/rowery", bike_urls_path)
+    for url in crawler.run(overwrite=overwrite):
+        downloader = KrossDownloader(url, raw_htmls_dir, overwrite=overwrite)
         downloader.run()
