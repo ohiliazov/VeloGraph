@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from core.constants import BikeCategory, MaterialGroup
 from core.utils import get_bike_categories, get_material_group
@@ -15,32 +15,34 @@ class BikeDefinitionSchema(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    simple_categories: list[BikeCategory] = Field(default_factory=list)
-    simple_material: MaterialGroup | None = None
+    @computed_field
+    @property
+    def simple_categories(self) -> list[BikeCategory]:
+        return get_bike_categories(self.category)
 
-    @model_validator(mode="after")
-    def set_simple_fields(self):
-        self.simple_categories = get_bike_categories(self.category)
+    @computed_field
+    @property
+    def simple_material(self) -> MaterialGroup | None:
         if self.material:
-            self.simple_material = get_material_group(self.material)
-        return self
+            return get_material_group(self.material)
+        return None
 
 
 class GeometrySpecSchema(BaseModel):
     size_label: str
-    stack_mm: int
-    reach_mm: int
-    top_tube_effective_mm: int | None = None
-    seat_tube_length_mm: int | None = None
-    head_tube_length_mm: int | None = None
-    head_tube_angle: float
-    seat_tube_angle: float
-    chainstay_length_mm: int
-    wheelbase_mm: int
-    bb_drop_mm: int
-    fork_offset_mm: int | None = None
-    trail_mm: int | None = None
-    standover_height_mm: int | None = None
+    stack_mm: int = Field(gt=0)
+    reach_mm: int = Field(gt=0)
+    top_tube_effective_mm: int | None = Field(default=None, gt=0)
+    seat_tube_length_mm: int | None = Field(default=None, gt=0)
+    head_tube_length_mm: int | None = Field(default=None, gt=0)
+    head_tube_angle: float = Field(gt=0, lt=90)
+    seat_tube_angle: float = Field(gt=0, lt=90)
+    chainstay_length_mm: int = Field(gt=0)
+    wheelbase_mm: int = Field(gt=0)
+    bb_drop_mm: int = Field(ge=0)
+    fork_offset_mm: int | None = Field(default=None, ge=0)
+    trail_mm: int | None = Field(default=None, gt=0)
+    standover_height_mm: int | None = Field(default=None, gt=0)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -74,3 +76,7 @@ class SearchResult(BaseModel):
 class GroupedSearchResult(BaseModel):
     total: int
     items: list[BikeDefinitionExtendedSchema] = Field(default_factory=list)
+
+
+class MessageResponse(BaseModel):
+    detail: str

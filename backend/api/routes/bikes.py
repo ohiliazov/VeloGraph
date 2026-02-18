@@ -15,6 +15,7 @@ from api.schemas import (
     GeometrySpecExtendedSchema,
     GeometrySpecSchema,
     GroupedSearchResult,
+    MessageResponse,
     SearchResult,
 )
 from core.constants import MaterialGroup
@@ -29,7 +30,7 @@ router = APIRouter()
 @router.get("/definitions", response_model=list[BikeDefinitionSchema])
 async def list_definitions(db: Annotated[AsyncSession, Depends(get_async_db)], limit: int = 100):
     result = await db.execute(select(BikeDefinitionORM).limit(limit))
-    return result.all()
+    return result.scalars().all()
 
 
 @router.post("/definitions", response_model=BikeDefinitionSchema)
@@ -201,7 +202,7 @@ async def get_geometry_spec(spec_id: int, db: Annotated[AsyncSession, Depends(ge
     return spec
 
 
-@router.delete("/specs/{spec_id}")
+@router.delete("/specs/{spec_id}", response_model=MessageResponse)
 async def delete_geometry_spec(
     spec_id: int,
     db: Annotated[AsyncSession, Depends(get_async_db)],
