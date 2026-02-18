@@ -19,7 +19,7 @@ class BikeDefinitionORM(Base):
     year_end: Mapped[int] = mapped_column(nullable=True)
     material: Mapped[str] = mapped_column(nullable=True)
 
-    __table_args__ = (UniqueConstraint("brand_name", "model_name", name="_brand_model_uc"),)
+    __table_args__ = (UniqueConstraint("brand_name", "model_name", "year_start", "year_end", name="_brand_model_uc"),)
 
     # One Frame Definition has MANY Geometry Sizes
     geometries: Mapped[list[GeometrySpecORM]] = relationship(back_populates="definition", cascade="all, delete-orphan")

@@ -222,11 +222,9 @@ class KrossBikeExtractor:
 if __name__ == "__main__":
     raw_htmls_dir = artifacts_dir / "kross" / "raw_htmls"
     extracted_json_dir = artifacts_dir / "kross" / "extracted"
-    error_dir = artifacts_dir / "kross" / "invalid_htmls"
 
     shutil.rmtree(extracted_json_dir, ignore_errors=True)
     extracted_json_dir.mkdir(parents=True, exist_ok=True)
-    error_dir.mkdir(parents=True, exist_ok=True)
 
     html_files = sorted(list(raw_htmls_dir.glob("*.html")))
     total = len(html_files)
@@ -241,9 +239,5 @@ if __name__ == "__main__":
             files_processed += 1
         except ValidationError as err:
             logger.error(f"Validation error in {html_path.name}: {err}")
-            shutil.copy(html_path, error_dir / html_path.name)
-        except Exception:
-            logger.exception(f"🚨 Error processing {html_path.name}")
-            shutil.copy(html_path, error_dir / html_path.name)
 
     logger.success(f"🏁 Done. Processed: {files_processed}/{total}")

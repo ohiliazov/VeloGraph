@@ -55,6 +55,8 @@ class Populator:
         stmt = select(BikeDefinitionORM).where(
             BikeDefinitionORM.brand_name == brand_name,
             BikeDefinitionORM.model_name.like(f"{base_model_name}%"),
+            BikeDefinitionORM.year_start == bike_def.year_start,
+            BikeDefinitionORM.year_end == bike_def.year_end,
         )
         existing_defs = list(self.db.execute(stmt).scalars())
 

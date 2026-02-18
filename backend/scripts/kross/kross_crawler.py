@@ -115,20 +115,55 @@ class KrossDownloader:
         return self.input_url.rstrip("/").split("/")[-1]
 
     def _download_single_page(self):
-
         if self.output_html_path.exists() and not self.overwrite:
             logger.info("⏭️ Skipping existing file: {}", self.output_html_path.name)
             return
 
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+            context = browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/122.0.0.0 Safari/537.36"
+                )
+            )
+            page = context.new_page()
             # Block heavy resources
             page.route("**/*", route_resource_type_handler)
             logger.debug("🌐 Navigating to {}", self.input_url)
             page.goto(self.input_url, wait_until="load", timeout=30000)
+
+            # 1. Dismiss cookie banner if it exists
+            try:
+                # Common IDs for Kross cookie banner
+                accept_btn = page.query_selector("#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll")
+                if accept_btn:
+                    accept_btn.click()
+                    logger.debug("🍪 Cookie banner dismissed")
+            except Exception:
+                pass
+
+            # 2. Find the dimensions wrapper and scroll to it to trigger lazy load
+            try:
+                wrapper = page.wait_for_selector(".dimensions-table-wrapper", timeout=5000)
+                if wrapper:
+                    wrapper.scroll_into_view_if_needed()
+                    logger.debug("📜 Scrolled to geometry wrapper")
+            except Exception:
+                pass
+
+            # 3. Wait for geometry table to be loaded
+            try:
+                # We wait for the table inside the wrapper
+                page.wait_for_selector("div.dimensions-table table, .dimensions-table-wrapper table", timeout=10000)
+                logger.debug("✅ Geometry table loaded for {}", self.input_url)
+            except Error:
+                logger.warning("⚠️ Timeout waiting for geometry table in {}", self.input_url)
+
             self._save_file(page.content(), self.output_html_path)
             logger.success("✅ Downloaded and saved: {}", self.output_html_path.name)
+            browser.close()
 
     @retry(
         stop=stop_after_attempt(3),
@@ -139,6 +174,9 @@ class KrossDownloader:
     )
     def run(self):
         logger.info("🚀 Downloading {}", self.input_url)
+        # Append #choose_size to trigger auto-scroll and potentially lazy loading on Kross site
+        if "#" not in self.input_url:
+            self.input_url = f"{self.input_url}#choose_size"
         self._download_single_page()
 
 
